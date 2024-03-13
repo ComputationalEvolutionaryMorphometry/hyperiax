@@ -23,8 +23,10 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: "3.11"
-    - run: ls && cd .. && ls && cd hyperiax && python setup.py sdist
-      name: Build package
+    - name: Checkout the repository
+      uses: actions/checkout@v2
+    - name: Build package
+      run: python setup.py sdist
      # working-directory: ./app
 
 
