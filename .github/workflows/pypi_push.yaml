@@ -21,8 +21,7 @@ jobs:
     # retrieve your distributions here
     - name: Build package
       uses: actions/setup-python@v4
-      run:
-        - python setup.py sdist
+      run: python setup.py sdist
       with:
         python-version: "3.11"
 
