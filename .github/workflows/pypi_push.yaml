@@ -23,6 +23,8 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: "3.11"
+    - name: Setup setuptools_scm
+      run: pip install setuptools_scm
     - name: Checkout the repository
       uses: actions/checkout@v2
     - name: Build package
