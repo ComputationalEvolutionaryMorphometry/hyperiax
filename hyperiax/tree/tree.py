@@ -200,25 +200,3 @@ class HypTree:
 
         """Converts a JaxTree to a Newick string."""
         return  to_newick(self.root) + ';'
-
-    def flow_eta(self:HypTree):
-        k = 0 
-        for level in self.iter_levels():
-            if len(level) == 1:
-                level[0].data["eta_cumulative"] = 0
-                continue
-
-            for node in level:
-                if k == 0: 
-                    node.data['eta_cumulative'] = node.parent.data['eta_cumulative']
-                    node.data['eta_cumulative'] += node.parent.data["eta_left"]
-                    k += 1
-                elif k == 1: 
-                    node.data['eta_cumulative'] = node.parent.data['eta_cumulative']
-                    node.data['eta_cumulative'] += node.parent.data["eta_right"]
-                
-                    k -= 1
-                else:
-                    print("Error")
-        return self
-
