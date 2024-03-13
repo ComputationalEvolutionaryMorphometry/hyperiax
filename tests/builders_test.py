@@ -1,5 +1,5 @@
-from jaxtrees.tree.builders import THeight_legacy
-from jaxtrees.tree.initializers import initialize_noise_inplace
+from hyperiax.tree.builders import THeight_legacy
+from hyperiax.tree.initializers import initialize_noise_inplace
 from jax.random import PRNGKey
 
 def test_theight_legacy():

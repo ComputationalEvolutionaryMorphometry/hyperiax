@@ -1,6 +1,6 @@
-from . import JaxTree, JaxNode
+from . import HypTree, TreeNode
 
-def THeight_legacy(h,degree,new_node=JaxNode,fake_root=None):
+def THeight_legacy(h,degree,new_node=TreeNode,fake_root=None):
     def _builder(h,degree,parent):
         """ generative tree of given height and degree """
         node = new_node(); node.parent = parent; node.children = None
@@ -9,19 +9,19 @@ def THeight_legacy(h,degree,new_node=JaxNode,fake_root=None):
         return node
     
     if fake_root is None:
-        return JaxTree(root=_builder(h,degree,None))
+        return HypTree(root=_builder(h,degree,None))
     else:
         fake_root.children = [_builder(h,degree,fake_root)]
-        return JaxTree(root=fake_root)
+        return HypTree(root=fake_root)
 
 
 
 def assymetric_tree(h):
     """ generative tree of given height """
     if h ==1:
-        return JaxTree(JaxNode())
+        return HypTree(TreeNode())
     # build asymmetric tree
-    root = JaxNode(children=[JaxNode(),JaxNode()])
+    root = TreeNode(children=[TreeNode(),TreeNode()])
 
     root.children[0].parent = root
     root.children[1].parent = root
@@ -29,7 +29,7 @@ def assymetric_tree(h):
     node = root.children[1]
 
     for i in range(h-1):
-        node.children = [JaxNode(),JaxNode()]
+        node.children = [TreeNode(),TreeNode()]
     
         node.children[0].parent = node
         node.children[1].parent = node
@@ -37,7 +37,7 @@ def assymetric_tree(h):
         node = node.children[1]
 
 
-    tree = JaxTree(root)
+    tree = HypTree(root)
     return tree 
 
 ### Tree generation and initialization
@@ -45,7 +45,7 @@ def tree_from_newick(newick_str):
     """Generate a JaxTree from a Newick string."""
     def parse_newick(newick_str):
         k = -1
-        root = current_node = JaxNode(children=[])  # Start with a root node
+        root = current_node = TreeNode(children=[])  # Start with a root node
         for i, char in enumerate(newick_str):
             if i < k:
                 #For some reason, the i and char will not be overwritten and contuine from there in the loop 
@@ -53,14 +53,14 @@ def tree_from_newick(newick_str):
                 continue
             elif char == '(':
                 # Create a new node and make it a child of the current node
-                new_node = JaxNode(parent=current_node,children =[])
+                new_node = TreeNode(parent=current_node,children =[])
                 current_node.children += [new_node]
                 current_node = new_node  # Move down to the new node
 
             elif char == ',':
                 # Go up to the parent, and then create a sibling node
                 current_node = current_node.parent
-                new_node = JaxNode(parent=current_node,children =[])
+                new_node = TreeNode(parent=current_node,children =[])
                 current_node.children += [new_node]
 
 
@@ -89,7 +89,7 @@ def tree_from_newick(newick_str):
                 #i  = i;char = newick_str[i+1]  # Adjust because the outer loop will increment `i`
                 k = i+1
                 
-        return JaxTree(root)
+        return HypTree(root)
     return parse_newick(newick_str)
 
 
@@ -102,7 +102,7 @@ def tree_from_newick_recursive(newick_str):
     def recursive_parse_newick(parent=None):
         name, length, delim, char = next(iter_tokens).groups(0)
 
-        node = JaxNode(name=name if name else None,             # create a "ghost" subtree root node without data
+        node = TreeNode(name=name if name else None,             # create a "ghost" subtree root node without data
                        data={"edge_length": float(length)} if length else {},
                        parent=parent,
                        children=[])

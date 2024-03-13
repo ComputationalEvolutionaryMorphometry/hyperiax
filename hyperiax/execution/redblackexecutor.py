@@ -1,9 +1,9 @@
-from jaxtrees.tree.jaxtree import JaxTree
+from hyperiax.tree.tree import HypTree
 from .unorderedexecutor import UnorderedExecutor
 import itertools
 
 class RedBlackExecutor(UnorderedExecutor):
-    def _determine_execution_pools(self, tree: JaxTree):
+    def _determine_execution_pools(self, tree: HypTree):
         levels = tree.iter_levels()
         l1, l2 = [], []
         for level in levels:

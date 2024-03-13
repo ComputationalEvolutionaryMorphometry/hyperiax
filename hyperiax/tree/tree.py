@@ -5,19 +5,19 @@ from jax import numpy as jnp
 import copy
 
 @dataclass(repr=False)
-class JaxNode:
+class TreeNode:
     """
     The data nodes within a tree, stupid by design. 
     Functionality is in JaxTree    
     """
-    parent : JaxNode = None
+    parent : TreeNode = None
     data : Dict = field(default_factory=dict)
-    children : List[JaxNode] = None
+    children : List[TreeNode] = None
     name : str = None
    
 
     def __repr__(self):
-        return f'JaxNode({self.data}) with {len(self.children)} children' if self.children else f'JaxNode({self.data}) with no children'
+        return f'TreeNode({self.data}) with {len(self.children)} children' if self.children else f'JaxNode({self.data}) with no children'
 
     def __getitem__(self, arg):
         return self.data.__getitem__(arg)
@@ -29,13 +29,13 @@ class JaxNode:
         self.data.__delitem__(key)
 
 
-class JaxTree:
-    def __init__(self, root : JaxNode) -> None:
+class HypTree:
+    def __init__(self, root : TreeNode) -> None:
         self.root = root
         self.order = None
         
     def __repr__(self) -> str:
-        return f'JaxTree with {len(list(self.iter_levels()))} levels and {len(self)} nodes'
+        return f'HypTree with {len(list(self.iter_levels()))} levels and {len(self)} nodes'
 
     def __len__(self) -> int:
         return len(list(self.iter_bfs()))
@@ -168,7 +168,7 @@ class JaxTree:
 
     def to_newick(self):
         # Recursive function to convert tree to Newick string
-        def to_newick(node:JaxNode):
+        def to_newick(node:TreeNode):
             """Recursively generates a Newick string from a JaxNode tree."""
             if node is None:
                 return ''
@@ -201,7 +201,7 @@ class JaxTree:
         """Converts a JaxTree to a Newick string."""
         return  to_newick(self.root) + ';'
 
-    def flow_eta(self:JaxTree):
+    def flow_eta(self:HypTree):
         k = 0 
         for level in self.iter_levels():
             if len(level) == 1:

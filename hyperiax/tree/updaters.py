@@ -1,5 +1,5 @@
 
-from . import JaxTree, JaxNode
+from . import HypTree, TreeNode
 from jax.random import PRNGKey, split
 import jax
 import jax.numpy as jnp
@@ -7,7 +7,7 @@ import copy
 from typing import Callable
 from functools import partial
 
-def update_noise_inplace(update_f: Callable[[JaxNode,float],float], tree : JaxTree, key=False, save_noise=False) -> JaxTree:
+def update_noise_inplace(update_f: Callable[[TreeNode,float],float], tree : HypTree, key=False, save_noise=False) -> HypTree:
     for node in tree.iter_bfs():
         subkey, key = split(key)
         if save_noise:

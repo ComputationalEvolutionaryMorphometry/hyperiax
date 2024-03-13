@@ -1,7 +1,8 @@
 from pytest import fixture
-from jaxtrees.tree.builders import THeight_legacy
-from jaxtrees.execution import LevelwiseTreeExecutor
-from jaxtrees.tree.initializers import initialize_noise_leaves
+from hyperiax.tree.builders import THeight_legacy
+from hyperiax.execution import LevelwiseTreeExecutor
+from hyperiax.models import UpDownLambda
+from hyperiax.tree.initializers import initialize_noise_leaves
 from jax.random import PRNGKey
 from jax import numpy as jnp
 
@@ -22,5 +23,7 @@ def phony_executor():
     down = lambda noise, parent, upmsg, key, params: noise.sqrt()
     fuse = lambda _,points: points.sum(0)
 
-    exe = LevelwiseTreeExecutor(up=up,down=down,fuse=fuse,collate_msgs=jnp.stack, batch_size=20)
+    model = UpDownLambda(up,fuse,down)
+
+    exe = LevelwiseTreeExecutor(model, batch_size=20)
     return exe  

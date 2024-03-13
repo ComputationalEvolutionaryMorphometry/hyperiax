@@ -1,7 +1,9 @@
-from jaxtrees.execution import LevelwiseTreeExecutor, DependencyTreeExecutor
-from .test_fixtures import small_tree, phony_executor,noise_tree
-from jaxtrees.tree import JaxNode, JaxTree
-import jaxtrees
+from hyperiax.execution import LevelwiseTreeExecutor, DependencyTreeExecutor
+from hyperiax.models import UpDownLambda
+from test_fixtures import small_tree, phony_executor,noise_tree
+from hyperiax.models.functional import pass_up, sum_fuse_children
+from hyperiax.tree import TreeNode, HypTree
+import hyperiax
 from jax.random import PRNGKey
 from jax import numpy as jnp
 import pytest
@@ -9,11 +11,13 @@ import pytest
 
 def test_lwte_sum(noise_tree):
     assert len(noise_tree.root.children) == 2
-    up = lambda noise, **kwargs: noise
-    fuse = lambda messages, **kwags: {'noise' : messages.sum(0)}
+    up = pass_up('noise')
+    fuse = sum_fuse_children(0)
     down = lambda parent_noise, **kwargs: {'noise': parent_noise/2}
 
-    exe = LevelwiseTreeExecutor(up=up,down=down,fuse=fuse)
+    model = UpDownLambda(up, fuse, down)
+
+    exe = LevelwiseTreeExecutor(model)
 
     manual_sum = jnp.stack([node.data['noise'] for node in noise_tree.iter_leaves()]).sum(0)
 
@@ -27,17 +31,17 @@ def test_lwte_sum(noise_tree):
 
 def test_lwte_levels_odd_tree(phony_executor):
     # build asymmetric tree
-    root = JaxNode(children=[JaxNode()])
+    root = TreeNode(children=[TreeNode()])
 
-    left = JaxNode()
-    left.children = [JaxNode(children=[JaxNode(), JaxNode()]) for _ in range(5)]    
+    left = TreeNode()
+    left.children = [TreeNode(children=[TreeNode(), TreeNode()]) for _ in range(5)]    
 
-    right = JaxNode()
-    right.children = [JaxNode(children=[JaxNode()]) for _ in range(2)]    
+    right = TreeNode()
+    right.children = [TreeNode(children=[TreeNode()]) for _ in range(2)]    
 
     root.children += [left,right]
 
-    tree = JaxTree(root)
+    tree = HypTree(root)
 
     # test if execution order makes sense
 
@@ -56,11 +60,14 @@ def test_aggregator(phony_executor):
 #@pytest.mark.skip(reason='in development')
 def test_heap_sum(noise_tree):
     assert len(noise_tree.root.children) == 2
-    up = lambda noise, **kwargs: noise
-    fuse = lambda messages, **kwags: {'noise' : messages.sum(0)}
+    up = pass_up('noise')
+    fuse = sum_fuse_children(0)
     down = lambda parent_noise, **kwargs: {'noise': parent_noise/2}
 
-    exe = DependencyTreeExecutor(up=up,down=down,fuse=fuse)
+
+    model = UpDownLambda(up, fuse,  down)
+
+    exe = LevelwiseTreeExecutor(model)
 
     manual_sum = jnp.stack([node.data['noise'] for node in noise_tree.iter_leaves()]).sum(0)
 

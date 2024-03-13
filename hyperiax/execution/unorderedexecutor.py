@@ -1,6 +1,6 @@
 from typing import Any
 from ..models import UpdateModel
-from ..tree import JaxTree
+from ..tree import HypTree
 from abc import abstractmethod
 from ..mcmc import ParameterStore
 from .collate import dict_collate
@@ -14,14 +14,14 @@ class UnorderedExecutor:
         self.iterator_states = {}
 
     @abstractmethod
-    def _determine_execution_pools(self, tree : JaxTree):
+    def _determine_execution_pools(self, tree : HypTree):
         ...
 
     @abstractmethod
     def _iter_pools(self, pools):
         ...
 
-    def get_iterator(self, tree : JaxTree):
+    def get_iterator(self, tree : HypTree):
         pools = self._determine_execution_pools(tree)
         pooliter = iter(self._iter_pools(pools))
         return UpdateIterator(pooliter)
