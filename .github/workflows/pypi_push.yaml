@@ -19,11 +19,12 @@ jobs:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
     # retrieve your distributions here
-    - name: Build package
+    - name: Setup python
       uses: actions/setup-python@v4
-      run: python setup.py sdist
       with:
         python-version: "3.11"
+    - run: python setup.py sdist
+      name: Build package
 
 
     - name: Publish package distributions to PyPI
