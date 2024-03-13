@@ -10,16 +10,16 @@ When contributing to the repository, we suggest a general guideline for easily o
 1. [Fork the repository on GitHub](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo), and clone your forked repository to your local machine.
 ```
 # Clone the forked repository
-git clone https://github.com/<your-username>/jax_trees.git
+https://github.com/<your username>/hyperiax
 
 # Navigate to the directory
-cd jax_tress
+cd hyperiax
 ```
 2. [Create the environment and install required packages](./README.md#installation)
 3. Make sure your `main` branch points at the original repository's `main`, so that you can easily get updates from the original by just running `git pull`: 
 ```
 # Add the original repository as a remote to your own repository
-git remote add upstream https://github.com/stefansommer/jax_trees.git
+git remote add upstream https://github.com/ComputationalEvolutionaryMorphometry/hyperiax
 
 # Fetch the upstream and connect your local main branch to the original main
 git fetch upstream
