@@ -170,3 +170,4 @@ todo
 changelog
 # generated on build server
 *_version.py
+examples/example_data
