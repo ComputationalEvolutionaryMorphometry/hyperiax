@@ -3,8 +3,8 @@ name = "hyperiax"
 authors = [
   { name="Stefan Sommer", email="sommer@di.ku.dk" },
   { name="Marcus Holte Teller", email="marcus@di.ku.dk" },
-  { name="Gefan Yang" },
-  { name="Michael Baand Severinsen" },
+  { name="Gefan Yang", email="***@di.ku.dk"},
+  { name="Michael Baand Severinsen", email="***@di.ku.dk" },
 
 ]
 description = "Tree traversals using Jax"
