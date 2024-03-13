@@ -1,0 +1,224 @@
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import List, Any, Dict
+from jax import numpy as jnp
+import copy
+
+@dataclass(repr=False)
+class JaxNode:
+    """
+    The data nodes within a tree, stupid by design. 
+    Functionality is in JaxTree    
+    """
+    parent : JaxNode = None
+    data : Dict = field(default_factory=dict)
+    children : List[JaxNode] = None
+    name : str = None
+   
+
+    def __repr__(self):
+        return f'JaxNode({self.data}) with {len(self.children)} children' if self.children else f'JaxNode({self.data}) with no children'
+
+    def __getitem__(self, arg):
+        return self.data.__getitem__(arg)
+
+    def __setitem__(self, key, arg):
+        self.data.__setitem__(key, arg)
+
+    def __delitem__(self, key):
+        self.data.__delitem__(key)
+
+
+class JaxTree:
+    def __init__(self, root : JaxNode) -> None:
+        self.root = root
+        self.order = None
+        
+    def __repr__(self) -> str:
+        return f'JaxTree with {len(list(self.iter_levels()))} levels and {len(self)} nodes'
+
+    def __len__(self) -> int:
+        return len(list(self.iter_bfs()))
+    
+    def __getitem__(self, arg):
+        for node in self.iter_bfs():
+            yield node.data.__getitem__(arg)
+
+    def __setitem__(self, key, arg):
+        if '__iter__' in getattr(arg, '__dict__', dict()):
+            for node, value in zip(self.iter_bfs(), arg):
+                node.data.__setitem__(key, value)
+        else:
+            for node in self.iter_bfs():
+                node.data.__setitem__(key, arg)
+    
+    def copy(self):
+        return copy.deepcopy(self)
+
+    def iter_leaves(self):
+        queue = [self.root]
+
+        while queue:
+            current = queue.pop(0)
+            if current.children: 
+                queue += current.children
+            else:
+                yield current
+
+    def iter_bfs(self):
+        queue = [self.root]
+
+        while queue:
+            current = queue.pop(0)
+            if current.children:  
+                queue += current.children
+            yield current
+
+
+    def iter_levels(self):
+        queue, buffer_queue = [], [self.root]
+        while queue or buffer_queue:
+            if not queue: # if queue is empty, flush the buffer and yield a level
+                queue = buffer_queue
+                yield list(buffer_queue) # to not pass the reference
+                buffer_queue = []
+
+            if children := queue.pop(0).children:
+                buffer_queue += children
+
+    def plot_tree_2d(self, ax=None, selector=None):
+        from matplotlib import pyplot as plt
+        from matplotlib import patches as mpatch
+
+        tree = 'partial'
+        for node in self.iter_bfs():
+            if node.data == None: break
+        else:
+            tree = 'full'
+
+        cmap = plt.cm.ocean
+
+        if ax == None:
+            fig,ax = plt.subplots(figsize=(10,8))
+        if tree == 'full':
+            levels = list(self.iter_levels())
+
+            for i, level in enumerate(levels):
+                for node in level:
+                    dat = selector(node.data) if selector else node.data
+                    if node.children:
+                        for child in node.children:
+                            cdat = selector(child.data) if selector else child.data
+                            ax.arrow(*dat, *(cdat-dat), width=0.01, length_includes_head=True, color='gray')
+                    ax.scatter(*dat, color=cmap(i/len(levels)))
+                    if 'name' in node.data.keys():
+                        ax.annotate(node.data['name'], dat, xytext=(5,5), textcoords='offset pixels')
+
+            handles = [mpatch.Patch(color=cmap(i/len(levels)), label = f'{i+1}') for i in range(len(levels))]
+            legend = ax.legend(handles=handles, title="Levels")
+            ax.add_artist(legend)
+            ax.grid(True)
+
+    def plot_tree(self, ax=None):
+        import matplotlib.pyplot as plt
+        def get_depth(node):
+            """Recursively find the maximum depth of the tree."""
+            if not hasattr(node, 'children') or not node.children:
+                return 0
+            return 1 + max(get_depth(child) for child in node.children)
+
+        def plot_node(node, depth, x=0, y=0, dx=1, parent_pos=None):
+            """Plot a single node and its children, spreading them equally."""
+            plt.plot(x, y, 'ko')  # Plot the current node
+            if parent_pos:
+                plt.plot([parent_pos[0], x], [parent_pos[1], y], 'k-')  # Draw line to parent
+
+            if hasattr(node, 'children') and node.children:
+                n_children = len(node.children)
+                width = dx * (2 ** (max_depth - depth - 1))  # Calculate spread based on depth
+                start_x = x - width / 2 + width / (2 * n_children)  # Starting x position for children
+                for i, child in enumerate(node.children):
+                    child_x = start_x + i * (width / n_children)
+                    plot_node(child, depth + 1, child_x, y - vertical_spacing, dx, (x, y))
+
+        max_depth = get_depth(self.root)
+        vertical_spacing = 1.5  # Vertical spacing between levels
+
+        plt.figure(figsize=(10, 8))
+        plot_node(self.root, 0, 0, max_depth * vertical_spacing, dx=1)
+        plt.axis('off')
+        plt.show()
+
+    def plot_tree_text(self):
+        elbow = "└──"
+        pipe = "│  "
+        tee = "├──"
+        blank = "   "
+
+        def print_tree(node, last=True, header=''):
+            print(header+ (elbow if last else tee) + (node.name if node.name else '*'))
+            if node.children:
+                for i, child in enumerate(node.children):
+                    print_tree(child, header=header + (blank if last else pipe), last=i == len(node.children) - 1)
+            else:
+                return
+
+        print_tree(self.root)
+
+
+    def to_newick(self):
+        # Recursive function to convert tree to Newick string
+        def to_newick(node:JaxNode):
+            """Recursively generates a Newick string from a JaxNode tree."""
+            if node is None:
+                return ''
+            
+            parts = []
+            if node.children is not None:
+                for child in node.children:
+
+                    part = to_newick(child)
+                    parts.append(part)
+                
+            # If the current node has children, enclose the children's string representation in parentheses
+            if parts:
+                children_str = '(' + ','.join(parts) + ')'
+            else:
+                children_str = ''
+
+            # Node name and distance formatting
+            node_info = node.name if node.name else ''
+            if 'edge_length' in node.data:
+                node_info += ':' + str(node.data['edge_length'])
+
+            # For nodes that have both children and their own information (name or distance)
+            if children_str or node_info:
+                return children_str + node_info
+            else:
+                # For the very rare case where a node might not have a name or children (unlikely in valid Newick)
+                return ''
+
+        """Converts a JaxTree to a Newick string."""
+        return  to_newick(self.root) + ';'
+
+    def flow_eta(self:JaxTree):
+        k = 0 
+        for level in self.iter_levels():
+            if len(level) == 1:
+                level[0].data["eta_cumulative"] = 0
+                continue
+
+            for node in level:
+                if k == 0: 
+                    node.data['eta_cumulative'] = node.parent.data['eta_cumulative']
+                    node.data['eta_cumulative'] += node.parent.data["eta_left"]
+                    k += 1
+                elif k == 1: 
+                    node.data['eta_cumulative'] = node.parent.data['eta_cumulative']
+                    node.data['eta_cumulative'] += node.parent.data["eta_right"]
+                
+                    k -= 1
+                else:
+                    print("Error")
+        return self
+

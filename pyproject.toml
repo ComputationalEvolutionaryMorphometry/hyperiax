@@ -1,0 +1,24 @@
+[project]
+name = "hyperiax"
+version = "0.1.0"
+authors = [
+  { name="Stefan Sommer", email="sommer@di.ku.dk" },
+]
+description = "Tree traversals using Jax"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "jax",
+    "jaxlib",
+]
+
+[project.urls]
+Homepage = "https://github.com/stefansommer/hyperiax"
+Issues = "https://github.com/stefansommer/hyperiax/issues"
+
+

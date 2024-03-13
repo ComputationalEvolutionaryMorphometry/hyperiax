@@ -1,0 +1,6 @@
+jax
+jaxlib
+tqdm
+matplotlib
+jupyter
+HeapDict
