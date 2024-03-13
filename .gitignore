@@ -168,3 +168,5 @@ docs/
 data/
 todo
 changelog
+# generated on build server
+*_version.py

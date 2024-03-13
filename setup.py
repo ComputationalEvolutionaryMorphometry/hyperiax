@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
+import pkg_resources  
+
+
 setup(
-    name='jaxtrees',
-    version='0.1.0',
-    author='Marcus Teller',
-    author_email='marcus@di.ku.dk',
+    name='hyperiax',
     description='',
     packages=find_packages(),
     classifiers=[
