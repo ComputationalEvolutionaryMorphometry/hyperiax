@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 
 class Parameter(ABC):
@@ -8,7 +9,7 @@ class Parameter(ABC):
     def update(self, value, accepted): ...
 
     @abstractmethod
-    def propose(self, key): ...
+    def propose(self, key) -> Parameter: ...
 
     @abstractmethod
     def log_prior(self):

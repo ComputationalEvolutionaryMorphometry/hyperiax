@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Dict
 from .parameter import Parameter
 from jax.random import split
@@ -23,19 +24,17 @@ class ParameterStore:
 
         return {k: v.propose(rngkey) for rngkey, (k,v) in zip(subkeys, self.params.items())}
 
-    def propose_new(self, key):
-        new = deepcopy(self)
+    def propose(self, key) -> ParameterStore:
         pcount = len(self)
         subkeys = split(key, pcount)
-
-        for rngkey, (k,v) in zip(subkeys, new.params.items()):
-            new.params[k].value = v.propose(rngkey)
         
-        return new
-    
-    def update(self, values, accept):
-        for k,v in values.items():
-            self.params[k].update(v, accept)
+        return ParameterStore({
+            k: v.propose(rngkey)
+            for 
+            rngkey, (k,v)
+            in 
+            zip(subkeys, self.params.items())
+        })
 
     def log_prior(self):
         return sum([v.log_prior() for v in self.params.values()])
