@@ -16,10 +16,28 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "HeapDict",
     "jax",
     "jaxlib",
+    "tqdm",
 ]
 dynamic = ["version"]
+
+[project.optional-dependencies]
+examples = [
+    "jaxdifferentialgeometry",
+    "jupyter",
+    "matplotlib",
+    "pandas",
+    "tqdm",
+]
+dev = [
+    "black",
+    "flake8",
+    "jupyter",
+    "matplotlib",
+    "mypy",
+]
 
 [project.urls]
 Homepage = "https://github.com/stefansommer/hyperiax"
