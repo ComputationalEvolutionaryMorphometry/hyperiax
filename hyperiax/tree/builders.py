@@ -1,25 +1,43 @@
+from typing import Type
+
 from . import HypTree, TreeNode
 
-def THeight_legacy(h,degree,new_node=TreeNode,fake_root=None):
-    def _builder(h,degree,parent):
-        """ generative tree of given height and degree """
+
+def THeight_legacy(h: int, degree: int, new_node: Type[TreeNode] = TreeNode, fake_root=None):
+    """Generate tree of given height and degree
+
+    A tree of height zero contains just the root;
+    a tree of height one contains the root and one level of leaves below it,
+    and so forth.
+    """
+    if h < 0:
+        raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
+
+    def _builder(h: int, degree: int, parent):
         node = new_node(); node.parent = parent; node.children = None
         if h > 1:
-            node.children = [_builder(h-1,degree,node) for i in range(degree)]
+            node.children = [_builder(h - 1, degree, node) for _ in range(degree)]
         return node
-    
+
     if fake_root is None:
-        return HypTree(root=_builder(h,degree,None))
+        return HypTree(root=_builder(h + 1, degree, None))
     else:
-        fake_root.children = [_builder(h,degree,fake_root)]
+        fake_root.children = [_builder(h + 1, degree, fake_root)]
         return HypTree(root=fake_root)
 
 
+def assymetric_tree(h: int):
+    """Generate tree of given height
 
-def assymetric_tree(h):
-    """ generative tree of given height """
-    if h ==1:
+    A tree of height zero contains just the root;
+    a tree of height one contains the root and one level of leaves below it,
+    and so forth.
+    """
+    if h < 0:
+        raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
+    elif h == 0:
         return HypTree(TreeNode())
+
     # build asymmetric tree
     root = TreeNode(children=[TreeNode(),TreeNode()])
 
@@ -28,7 +46,7 @@ def assymetric_tree(h):
 
     node = root.children[1]
 
-    for i in range(h-1):
+    for _ in range(h - 1):
         node.children = [TreeNode(),TreeNode()]
     
         node.children[0].parent = node
@@ -36,9 +54,9 @@ def assymetric_tree(h):
 
         node = node.children[1]
 
-
     tree = HypTree(root)
     return tree 
+
 
 ### Tree generation and initialization
 def tree_from_newick(newick_str):
@@ -121,4 +139,3 @@ def tree_from_newick_recursive(newick_str):
         return node, delim
     
     return recursive_parse_newick()[0]
-
