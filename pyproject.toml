@@ -37,6 +37,7 @@ dev = [
     "jupyter",
     "matplotlib",
     "mypy",
+    "pytest",
 ]
 
 [project.urls]
