@@ -66,10 +66,12 @@ class OrderedExecutor(ABC):
                 self.key, subkey = jax.random.split(self.key)
 
                 results = self.model.up(**data, key=subkey, params=params)
-
-                iterator = zip(nodes, DictTransposer(results))
-                for node,node_result in iterator:
-                    node.up_val = node_result
+                iterator = zip(nodes, DictTransposer(results), strict = True)
+                try:
+                    for node,node_result in iterator:
+                        node.up_val = node_result
+                except ValueError:
+                    raise ValueError(f"Number of returned elements ({max(len(v) for k,v in results.items())}) does not match number of nodes ({len(nodes)})")
 
         return new_tree
 
