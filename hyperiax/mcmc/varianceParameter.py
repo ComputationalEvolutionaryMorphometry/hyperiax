@@ -21,7 +21,7 @@ class VarianceParameter(Parameter):
         alpha_proposal = 2.0  # Choose an arbitrary value for alpha
         beta_proposal = mode * (alpha_proposal + 1)
 
-        return beta_proposal / jax.random.gamma(key, alpha_proposal, shape=())
+        return VarianceParameter(beta_proposal / jax.random.gamma(key, alpha_proposal, shape=()), self.alpha, self.beta)
     
     def update(self, value, accepted): 
         if accepted:

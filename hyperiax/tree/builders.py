@@ -16,7 +16,7 @@ def THeight_legacy(h,degree,new_node=TreeNode,fake_root=None):
 
 
 
-def assymetric_tree(h):
+def asymmetric_tree(h):
     """ generative tree of given height """
     if h ==1:
         return HypTree(TreeNode())

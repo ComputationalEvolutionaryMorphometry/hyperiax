@@ -29,7 +29,6 @@ examples = [
     "jupyter",
     "matplotlib",
     "pandas",
-    "tqdm",
 ]
 dev = [
     "black",
