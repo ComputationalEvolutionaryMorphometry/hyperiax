@@ -32,6 +32,10 @@ class TreeNode:
 
 
 class HypTree:
+    """The tree class that wraps behavious around a set of nodes.
+
+    The set of nodes is given via the `root` node, and can be iterated conveniently using the utility in this class.
+    """
     def __init__(self, root : TreeNode) -> None:
         self.root = root
         self.order = None
@@ -58,6 +62,11 @@ class HypTree:
         return copy.deepcopy(self)
 
     def iter_leaves(self):
+        """Iterates over the leaves in the tree
+
+        Yields:
+            iterator: an interator that runs over the leaves.
+        """
         queue = deque([self.root])
 
         while queue:
@@ -68,6 +77,11 @@ class HypTree:
                 yield current
 
     def iter_bfs(self):
+        """Iterate over all of the nodes in a breadth first manner
+
+        Yields:
+            iterator: an iterator that runs over the nodes
+        """
         queue = deque([self.root])
 
         while queue:
@@ -77,6 +91,11 @@ class HypTree:
             yield current
 
     def iter_levels(self):
+        """Iterate over each level in the tree
+
+        Yields:
+            iterator: an iterator that runs over each level
+        """
         queue = deque()
         buffer_queue = deque([self.root])
         while queue or buffer_queue:

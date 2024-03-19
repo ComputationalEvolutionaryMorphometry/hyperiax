@@ -1,10 +1,10 @@
 from typing import Any
+
+from ..tree import TreeNode
 from ..models import UpdateModel
 from ..tree import HypTree
 from abc import abstractmethod
-from ..mcmc import ParameterStore
 from .collate import dict_collate
-import jax.random
 
 class UnorderedExecutor:
     "Executes nodes in an unstructured way; giving full context from both parents and children"
@@ -22,11 +22,28 @@ class UnorderedExecutor:
         ...
 
     def get_iterator(self, tree : HypTree):
+        """Get the iterator that runs over the tree
+
+        Args:
+            tree (HypTree): the tree to run over
+
+        Returns:
+            iterable: the iterator
+        """
         pools = self._determine_execution_pools(tree)
         pooliter = iter(self._iter_pools(pools))
         return UpdateIterator(pooliter)
 
-    def update(self, node, params):
+    def update(self, node : TreeNode, params):
+        """This method executes the model implementation on the given node using the sampled params
+
+        Args:
+            node (TreeNode): The node to execute on
+            params (dict): the sampled params to use
+
+        Returns:
+            bool: whether or not the sampled parameters should be accepted.
+        """
         child_data = dict_collate([child.data for child in node.children]) if node.children else {}
         parent = node.parent.data if node.parent else {}
 
