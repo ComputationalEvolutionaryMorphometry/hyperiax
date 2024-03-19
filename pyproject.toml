@@ -22,8 +22,8 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/stefansommer/hyperiax"
-Issues = "https://github.com/stefansommer/hyperiax/issues"
+Homepage = "https://github.com/computationalevolutionarymorphometry/hyperiax"
+Issues = "https://github.com/computationalevolutionarymorphometry/hyperiax/issues"
 
 [build-system]
 requires = [
