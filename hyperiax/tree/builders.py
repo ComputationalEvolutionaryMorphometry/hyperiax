@@ -26,7 +26,7 @@ def THeight_legacy(h: int, degree: int, new_node: Type[TreeNode] = TreeNode, fak
         return HypTree(root=fake_root)
 
 
-def assymetric_tree(h: int):
+def asymmetric_tree(h: int):
     """Generate tree of given height
 
     A tree of height zero contains just the root;
