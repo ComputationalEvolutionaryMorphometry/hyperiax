@@ -19,7 +19,7 @@ class TreeNode:
    
 
     def __repr__(self):
-        return f'TreeNode({self.data}) with {len(self.children)} children' if self.children else f'JaxNode({self.data}) with no children'
+        return f'TreeNode({self.data}) with {len(self.children)} children' if self.children else f'TreeNode({self.data}) with no children'
 
     def __getitem__(self, arg):
         return self.data.__getitem__(arg)
