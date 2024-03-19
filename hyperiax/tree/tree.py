@@ -1,8 +1,10 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Any, Dict
-from jax import numpy as jnp
+
 import copy
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Dict, List
+
 
 @dataclass(repr=False)
 class TreeNode:
@@ -56,35 +58,35 @@ class HypTree:
         return copy.deepcopy(self)
 
     def iter_leaves(self):
-        queue = [self.root]
+        queue = deque([self.root])
 
         while queue:
-            current = queue.pop(0)
-            if current.children: 
-                queue += current.children
+            current = queue.popleft()
+            if current.children:
+                queue.extend(current.children)
             else:
                 yield current
 
     def iter_bfs(self):
-        queue = [self.root]
+        queue = deque([self.root])
 
         while queue:
-            current = queue.pop(0)
-            if current.children:  
-                queue += current.children
+            current = queue.popleft()
+            if current.children:
+                queue.extend(current.children)
             yield current
 
-
     def iter_levels(self):
-        queue, buffer_queue = [], [self.root]
+        queue = deque()
+        buffer_queue = deque([self.root])
         while queue or buffer_queue:
             if not queue: # if queue is empty, flush the buffer and yield a level
                 queue = buffer_queue
                 yield list(buffer_queue) # to not pass the reference
-                buffer_queue = []
+                buffer_queue = deque()
 
-            if children := queue.pop(0).children:
-                buffer_queue += children
+            if children := queue.popleft().children:
+                buffer_queue.extend(children)
 
     def plot_tree_2d(self, ax=None, selector=None):
         from matplotlib import pyplot as plt
