@@ -5,6 +5,10 @@ from functools import partial
 from ..functional import pass_up
 
 class PhyloMeanModel(UpModel):
+    """Prebuilt model that calculates phylogenetic means in each node
+
+    Assumes leafs all contain `estimated_value` before running it. This corresponds to actual observations.
+    """
     def __init__(self,param_config = {}, **kwargs) -> None:
         super().__init__()
 

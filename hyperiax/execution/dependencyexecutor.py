@@ -3,6 +3,11 @@ from heapdict import heapdict
 
 
 class DependencyTreeExecutor(OrderedExecutor):
+    """Ordered executor that attempts to resolve dependencies in the tree.
+
+    When batching it can include nodes from multiple levels in the same batch, 
+    if they are not directly dependent on eachother with respect to the operation.
+    """
     def _determine_execution_order(self, tree):
         heap = heapdict()
 
