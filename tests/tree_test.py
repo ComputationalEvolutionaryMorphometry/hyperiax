@@ -8,7 +8,7 @@ def test_theight_legacy():
 
     leaves = list(tree.iter_leaves())
 
-    assert len(leaves) == 2**5
+    assert len(leaves) == 2**6
 
 def test_assign_leaves():
     tree = THeight_legacy(6, 2)
