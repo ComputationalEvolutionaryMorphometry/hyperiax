@@ -2,6 +2,10 @@ from .updownmodel import UpModel, UpDownModel, DownModel
 from .updatemodel import UpdateModel
 
 class UpLambda(UpModel):
+    """Lambda model that only contains an up interface
+
+    Requires an up and fuse function.
+    """
     def __init__(self, up_fn, fuse_fn) -> None:
         super().__init__()
 
@@ -15,6 +19,10 @@ class UpLambda(UpModel):
         return self.fuse_fn(*args, **kwargs)
     
 class UpDownLambda(UpDownModel):
+    """Lambda model that only contains both an up and down interface
+
+    Requires an up, fuse and down function.
+    """
     def __init__(self, up_fn, fuse_fn, down_fn) -> None:
         super().__init__()
 
@@ -32,6 +40,10 @@ class UpDownLambda(UpDownModel):
         return self.down_fn(*args, **kwargs)
     
 class DownLambda(DownModel):
+    """Lambda model that only contains a down interface
+
+    Requires a down function.
+    """
     def __init__(self, down_fn) -> None:
         super().__init__()
 
@@ -41,6 +53,10 @@ class DownLambda(DownModel):
         return self.down_fn(*args, **kwargs)
     
 class UpdateLambda(UpdateModel):
+    """Lambda model that only contains a local update interface
+
+    Requires an update function.
+    """
     def __init__(self, update_fn) -> None:
         super().__init__()
 

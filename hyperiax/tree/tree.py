@@ -1,8 +1,10 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Any, Dict
-from jax import numpy as jnp
+
 import copy
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Dict, List
+
 
 @dataclass(repr=False)
 class TreeNode:
@@ -17,7 +19,7 @@ class TreeNode:
    
 
     def __repr__(self):
-        return f'TreeNode({self.data}) with {len(self.children)} children' if self.children else f'JaxNode({self.data}) with no children'
+        return f'TreeNode({self.data}) with {len(self.children)} children' if self.children else f'TreeNode({self.data}) with no children'
 
     def __getitem__(self, arg):
         return self.data.__getitem__(arg)
@@ -30,6 +32,10 @@ class TreeNode:
 
 
 class HypTree:
+    """The tree class that wraps behavious around a set of nodes.
+
+    The set of nodes is given via the `root` node, and can be iterated conveniently using the utility in this class.
+    """
     def __init__(self, root : TreeNode) -> None:
         self.root = root
         self.order = None
@@ -56,35 +62,50 @@ class HypTree:
         return copy.deepcopy(self)
 
     def iter_leaves(self):
-        queue = [self.root]
+        """Iterates over the leaves in the tree
+
+        Yields:
+            iterator: an interator that runs over the leaves.
+        """
+        queue = deque([self.root])
 
         while queue:
-            current = queue.pop(0)
-            if current.children: 
-                queue += current.children
+            current = queue.popleft()
+            if current.children:
+                queue.extend(current.children)
             else:
                 yield current
 
     def iter_bfs(self):
-        queue = [self.root]
+        """Iterate over all of the nodes in a breadth first manner
+
+        Yields:
+            iterator: an iterator that runs over the nodes
+        """
+        queue = deque([self.root])
 
         while queue:
-            current = queue.pop(0)
-            if current.children:  
-                queue += current.children
+            current = queue.popleft()
+            if current.children:
+                queue.extend(current.children)
             yield current
 
-
     def iter_levels(self):
-        queue, buffer_queue = [], [self.root]
+        """Iterate over each level in the tree
+
+        Yields:
+            iterator: an iterator that runs over each level
+        """
+        queue = deque()
+        buffer_queue = deque([self.root])
         while queue or buffer_queue:
             if not queue: # if queue is empty, flush the buffer and yield a level
                 queue = buffer_queue
                 yield list(buffer_queue) # to not pass the reference
-                buffer_queue = []
+                buffer_queue = deque()
 
-            if children := queue.pop(0).children:
-                buffer_queue += children
+            if children := queue.popleft().children:
+                buffer_queue.extend(children)
 
     def plot_tree_2d(self, ax=None, selector=None):
         from matplotlib import pyplot as plt

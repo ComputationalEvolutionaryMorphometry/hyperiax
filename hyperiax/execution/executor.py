@@ -1,15 +1,19 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any
 import copy
 from itertools import islice
-from tqdm.auto import tqdm
+from ..tree import HypTree
 import jax
-from .collate import tuple_collate, dict_collate, DictTransposer
+from .collate import dict_collate, DictTransposer
 from ..models import UpModel, UpDownModel, DownModel
 
 class OrderedExecutor(ABC):
-    """
+    """Abstract for the ordered executor.
+
+    Ordered executors performs operations in a certain direction (eg. up/down).
+
+    It contains on abstract method `_determine_execution_order``, which gives the order in which nodes
+    are to be executed in the tree. It is assumed that all operations are batched.
     """
     def __init__(self, 
                  model : UpModel | UpDownModel | DownModel,
@@ -27,6 +31,15 @@ class OrderedExecutor(ABC):
         """
 
     def updown(self, tree, params = {}):
+        """Runs both the up and downward pass
+
+        Args:
+            tree (HypTree): The tree to execute on
+            params (dict, optional): optional parameters for mcmc. Defaults to {}.
+
+        Returns:
+            HypTree: The tree after running one up and down pass
+        """
         t = self.up(tree, params=params)
         t = self.down(t, params=params)
 
@@ -40,7 +53,19 @@ class OrderedExecutor(ABC):
                 return
             yield batch
 
-    def up(self, tree, params = {}):
+    def up(self, tree : HypTree, params = {}):
+        """Runs the up pass on the tree
+
+        Args:
+            tree (HypTree): The tree to execute on
+            params (dict, optional): optional parameters for mcmc. Defaults to {}.
+
+        Raises:
+            ValueError: Mismatch on the number of returned items from client code. This happens when the model returns an incorrect number of items
+
+        Returns:
+            HypTree: The tree after running one pass
+        """
         if not issubclass(type(self.model), (UpDownModel, UpModel)):
             raise ValueError('Model needs to be of type UpDownModel or UpModel')
         if not tree.order or tree.order[1] != type(self):
@@ -78,6 +103,15 @@ class OrderedExecutor(ABC):
 
     
     def down(self, tree, params = {}):
+        """Runs the down pass on the tree
+
+        Args:
+            tree (HypTree): The tree to execute on
+            params (dict, optional): optional parameters for mcmc. Defaults to {}.
+
+        Returns:
+            HypTree: The tree after running one pass
+        """
         if not issubclass(type(self.model), (UpDownModel, DownModel)):
             raise ValueError('Model needs to be of type UpDownModel or DownModel')
         if not tree.order or tree.order[1] != type(self):

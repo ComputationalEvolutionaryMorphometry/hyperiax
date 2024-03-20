@@ -1,21 +1,25 @@
+from jax import numpy as jnp
+from jax.random import PRNGKey
 from pytest import fixture
-from hyperiax.tree.builders import THeight_legacy
+
 from hyperiax.execution import LevelwiseTreeExecutor
 from hyperiax.models import UpDownLambda
+from hyperiax.tree.builders import THeight_legacy
 from hyperiax.tree.initializers import initialize_noise_leaves
-from jax.random import PRNGKey
-from jax import numpy as jnp
+
 
 @fixture
 def small_tree():
     return THeight_legacy(5,2)
 
+
 @fixture
 def noise_tree():
     key = PRNGKey(0)
-    t = THeight_legacy(2,2)
-    t = initialize_noise_leaves(t,key, (2,))
+    t = THeight_legacy(1, 2)
+    t = initialize_noise_leaves(t, key, (2,))
     return t
+
 
 @fixture
 def phony_executor():
@@ -26,4 +30,4 @@ def phony_executor():
     model = UpDownLambda(up,fuse,down)
 
     exe = LevelwiseTreeExecutor(model, batch_size=20)
-    return exe  
+    return exe

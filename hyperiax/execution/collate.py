@@ -1,6 +1,14 @@
 from jax import numpy as jnp
 
 def tuple_collate(vals):
+    """Stacks tuples of identical shape into one tuple of said shape with a batch dimension
+
+    Args:
+        vals (list[tuple]): the tuples to be stacked
+
+    Returns:
+        tuple[list]: _description_
+    """
     raise DeprecationWarning()
     if all(type(v) != tuple for v in vals):
         return jnp.stack(vals)
@@ -17,6 +25,10 @@ def dict_collate(vals):
 
 
 class DictTransposer:
+    """Iterator that wraps a dictionary of lists
+
+        Iteration leads a dictionary with corresponding elements to list entires.
+    """
     def __init__(self, target):
         self.target = target
 
