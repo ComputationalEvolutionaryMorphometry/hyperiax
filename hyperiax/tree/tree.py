@@ -171,21 +171,9 @@ class HypTree:
         plt.show()
 
     def plot_tree_text(self):
-        elbow = "└──"
-        pipe = "│  "
-        tee = "├──"
-        blank = "   "
-
-        def print_tree(node, last=True, header=''):
-            print(header+ (elbow if last else tee) + (node.name if node.name else '*'))
-            if node.children:
-                for i, child in enumerate(node.children):
-                    print_tree(child, header=header + (blank if last else pipe), last=i == len(node.children) - 1)
-            else:
-                return
-
-        print_tree(self.root)
-
+        from .printer_utils import HypTreeFormatter
+        formatter = HypTreeFormatter(self)
+        formatter.print_tree()
 
     def to_newick(self):
         # Recursive function to convert tree to Newick string
