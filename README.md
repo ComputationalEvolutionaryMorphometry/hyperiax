@@ -15,12 +15,18 @@ conda activate hyperiax
 # Install Hyperiax directly using pip
 pip install hyperiax
 
-# Install Hyperiax from the repository
-git clone https://github.com/ComputationalEvolutionaryMorphometry/hyperiax.git
-pip install -r ./requirements.txt
+# Install Hyperiax from the repository, for the newest version
+pip install git+https://github.com/ComputationalEvolutionaryMorphometry/hyperiax.git
 
-# Install JAXGeometry for doing geometric statistics
-pip install jaxdifferentialgeometry
+# Install Hyperiax for development
+git clone git@github.com:ComputationalEvolutionaryMorphometry/hyperiax.git
+# or (if you haven't set up ssh)
+git clone https://github.com/ComputationalEvolutionaryMorphometry/hyperiax.git
+# and then install by
+pip install -e hyperiax[dev]
+# and optionally
+pip install -e hyperiax[examples]
+# to install the dependencies for all the example notebooks
 ```
 
 ## Code Examples

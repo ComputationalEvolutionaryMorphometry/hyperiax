@@ -1,5 +1,0 @@
-jax
-jaxlib
-tqdm
-matplotlib
-HeapDict

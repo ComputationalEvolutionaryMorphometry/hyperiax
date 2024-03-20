@@ -5,7 +5,6 @@ authors = [
   { name="Marcus Holte Teller", email="marcus@di.ku.dk" },
   { name="Gefan Yang", email="***@di.ku.dk"},
   { name="Michael Baand Severinsen", email="***@di.ku.dk" },
-
 ]
 description = "Tree traversals using Jax"
 readme = "README.md"
@@ -16,10 +15,29 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "cmd2",
+    "HeapDict",
     "jax",
     "jaxlib",
+    "tqdm",
 ]
 dynamic = ["version"]
+
+[project.optional-dependencies]
+examples = [
+    "jaxdifferentialgeometry",
+    "jupyter",
+    "matplotlib",
+    "pandas",
+]
+dev = [
+    "black",
+    "flake8",
+    "jupyter",
+    "matplotlib",
+    "mypy",
+    "pytest",
+]
 
 [project.urls]
 Homepage = "https://github.com/computationalevolutionarymorphometry/hyperiax"
@@ -28,8 +46,9 @@ Issues = "https://github.com/computationalevolutionarymorphometry/hyperiax/issue
 [build-system]
 requires = [
     "setuptools>=60",
-    "setuptools-scm>=8.0"]
+    "setuptools-scm>=8.0",
+]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-version_file = "jaxtrees/_version.py"
+version_file = "hyperiax/_version.py"
