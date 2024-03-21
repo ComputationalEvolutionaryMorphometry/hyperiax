@@ -75,7 +75,7 @@ inf_tree = exe.up(noisy_tree)
 # Do the sampling from top to bottom
 sample_tree = exe.down(noisy_tree)
 ```
-See [Examples](https://github.com/stefansommer/jax_trees/wiki/Examples) for more specific examples.
+See [Examples](https://github.com/ComputationalEvolutionaryMorphometry/hyperiax/wiki/Examples) for more specific examples.
 ## Documentation
 - __Getting Started__: See [Getting-Started](https://github.com/ComputationalEvolutionaryMorphometry/hyperiax/wiki/Getting-Started)
 - __Guidance__: See [Wiki](https://github.com/ComputationalEvolutionaryMorphometry/hyperiax/wiki)
