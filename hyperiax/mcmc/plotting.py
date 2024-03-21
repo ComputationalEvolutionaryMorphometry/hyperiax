@@ -18,6 +18,7 @@ def trace_plots(samples):
     for ax, (i, param) in zip(axes.ravel(), enumerate(samples[0].values().keys())):
         ax.plot(np.array([sample[param].value for sample in samples]))
         ax.set_title(f"Trace for {param}")
+        ax.set_xlabel('Iteration')
         ax.set_ylabel(param)
         ax.grid(True)
 
