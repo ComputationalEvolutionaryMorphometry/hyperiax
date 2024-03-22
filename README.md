@@ -33,7 +33,7 @@ pip install -e hyperiax[examples]
 - Set up a tree
 ```python
 # Initialize a tree with a height of 4 and a degree of 3
-tree = hyperiax.tree.builders.THeight_legacy(h=4, degree=3)
+tree = hyperiax.tree.builders.symmetric_tree(h=4, degree=3)
 # Visualize
 tree.plot_tree()
 

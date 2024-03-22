@@ -19,14 +19,13 @@ def test_lwte_sum(noise_tree):
 
     exe = LevelwiseTreeExecutor(model)
 
-    manual_sum = jnp.stack([node.data['noise'] for node in noise_tree.iter_leaves()]).sum(0)
-
+    manual_sum = jnp.stack([node['noise'] for node in noise_tree.iter_leaves()]).sum(0)
     tree_result = exe.up(noise_tree)
 
-    assert (tree_result.root.data['noise'] == manual_sum).all()
+    assert (tree_result.root['noise'] == manual_sum).all()
 
     down_result = exe.down(tree_result)
-    assert (next(down_result.iter_leaves()).data['noise'] == manual_sum/2).all()
+    assert (next(down_result.iter_leaves())['noise'] == manual_sum/2).all()
 
 
 def test_lwte_levels_odd_tree(phony_executor):

@@ -54,8 +54,28 @@ class OrderedExecutor(ABC):
             yield batch
 
     def up(self, tree : HypTree, params = {}):
-        """Runs the up pass on the tree
+        """Runs the up pass on the tree using the `up` and `fuse` functions from the model.
 
+        The `up` function in the model takes the following special parameters;
+        `key`: A PRNGKey
+        `params`: The same params passed to this function
+        `*`: Data from the node will be passed as arguments without prefix batched according to `batch_size`. \
+            If you have `value` stored in the node, `value` will be an argument passed batched with a leading axis of size `b`.
+
+        The executor expects the `up` function to return a dictionary, \
+            where each key returned overwrites the data in the `up` node.
+        Because of this, all values returned from `up` functions must have a leading axis of size `b`.
+
+        
+        The `fuse` function in the model is not batched and takes the following special parameters;  
+        `*`: Data from the node will be passed as arguments without prefix. \
+            If you have `value` stored in the node, `value` will be an argument passed.
+        `child_*`: Data from the `c` children nodes will be passed as arguments prefixed by `child`.\
+            If you have `value` stored in the children nodes `child_value` will be passed as an argument to `fuse`,\
+            being a stacked array with first axis of size `c`.
+        The executor expects the `fuse` function to return a dictionary, \
+            where each key returned overwrites the data in the node we are fusing.
+            
         Args:
             tree (HypTree): The tree to execute on
             params (dict, optional): optional parameters for mcmc. Defaults to {}.
@@ -103,7 +123,21 @@ class OrderedExecutor(ABC):
 
     
     def down(self, tree, params = {}):
-        """Runs the down pass on the tree
+        """Runs the down pass on the tree using the `down` function from the model.
+
+        The `down` function in the model takes the following special parameters;
+
+        `up_msg`: The message that was sent UP the edge during an upward pass
+        `key`: A PRNGKey
+        `params`: The same params passed to this function
+        `parent_*`: Data from the parent node will be passed as arguments prefixed by `parent`.\
+              If you have `value` stored in the parent node, `parent_value` will be an argument passed.
+        `*`: Data from the child node will be passed as arguments without prefix. \
+            If you have `value` stored in the child node, `value` will be an argument passed.
+
+        The executor expects the `down` function to return a dictionary, \
+            where each key returned overwrites the data in the lower node (with values not prefixed by `parent_`).
+        Because of this, all values returned from `down` functions must have a leading axis of size `b`.
 
         Args:
             tree (HypTree): The tree to execute on
@@ -143,12 +177,14 @@ class OrderedExecutor(ABC):
 
                 # results is expected to be a pytree with [b, ...] shape
 
-                iterator = zip(nodes, DictTransposer(results))
-                for node,node_result in iterator:
-                    node.down_val = node_result
+                iterator = zip(nodes, DictTransposer(results), strict=True)
+                try:
+                    for node,node_result in iterator:
+                        node.down_val = node_result
 
-                    node.data = {**node.data, **node_result}
-
+                        node.data = {**node.data, **node_result}
+                except ValueError:
+                    raise ValueError(f"Number of returned elements ({max(len(v) for k,v in results.items())}) does not match number of nodes ({len(nodes)})")
 
 
         return new_tree
