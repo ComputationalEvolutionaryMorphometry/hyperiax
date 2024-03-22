@@ -1,9 +1,10 @@
 from typing import Type
 
 from . import HypTree, TreeNode
+from .childrenlist import ChildList
 
 
-def THeight_legacy(h: int, degree: int, new_node: Type[TreeNode] = TreeNode, fake_root=None):
+def symmetric_tree(h: int, degree: int, new_node: Type[TreeNode] = TreeNode, fake_root=None):
     """Generate tree of given height and degree
 
     A tree of height zero contains just the root;
@@ -14,15 +15,15 @@ def THeight_legacy(h: int, degree: int, new_node: Type[TreeNode] = TreeNode, fak
         raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
 
     def _builder(h: int, degree: int, parent):
-        node = new_node(); node.parent = parent; node.children = None
+        node = new_node(); node.parent = parent; node.children = ChildList()
         if h > 1:
-            node.children = [_builder(h - 1, degree, node) for _ in range(degree)]
+            node.children = ChildList([_builder(h - 1, degree, node) for _ in range(degree)])
         return node
 
     if fake_root is None:
         return HypTree(root=_builder(h + 1, degree, None))
     else:
-        fake_root.children = [_builder(h + 1, degree, fake_root)]
+        fake_root.children = ChildList([_builder(h + 1, degree, fake_root)])
         return HypTree(root=fake_root)
 
 

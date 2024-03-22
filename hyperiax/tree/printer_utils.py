@@ -1,11 +1,10 @@
 # Functions for nicer tree printing in the terminal, modified from https://github.com/AharonSambol/PrettyPrintTree
 
 from typing import Any, List, Tuple, Generator
-from cmd2.ansi import style_aware_wcswidth as text_width
 
 from hyperiax.tree.tree import TreeNode, HypTree
 
-def zip_longest(*iterables: List, default: Any) -> Generator[Tuple, None, None]:
+def zip_longest(*iterables: List, default: Any) -> Generator:
     """
     Returns an iterator that aggregates elements from each of the input iterables.
     If the iterables are of unequal length, missing values are filled with the specified default value.
@@ -44,7 +43,7 @@ def left_adjust(text: str, amount: int, padding: str = ' ') -> str:
         str: The adjusted text.
 
     """
-    return text + padding * (amount - text_width(text))
+    return text + padding * (amount - len(text))
 
 def right_adjust(text: str, amount: int, padding: str =' ') -> str:
     """
@@ -59,7 +58,7 @@ def right_adjust(text: str, amount: int, padding: str =' ') -> str:
         str: The right adjusted text.
 
     """
-    return padding * (amount - text_width(text)) + text
+    return padding * (amount - len(text)) + text
 
 class TreeNodeFormatter:
     """
@@ -79,7 +78,7 @@ class TreeNodeFormatter:
         """
         lines = string.split('\n')
         height = len(lines)
-        width = max(text_width(line) for line in lines)
+        width = max(len(line) for line in lines)
         return cls(lines, height=height, width=width)
     
     def __init__(self, lines: List[str], *, height: int, width = int, middle_height: int = None, middle_width: int = None) -> None:
