@@ -4,6 +4,7 @@ import copy
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List
+from .childrenlist import ChildList
 
 
 @dataclass(repr=False)
@@ -29,6 +30,12 @@ class TreeNode:
 
     def __delitem__(self, key):
         self.data.__delitem__(key)
+
+    def add_child(self, child):
+        child.parent = self
+        self.children._add_child(child)
+        return child
+
 
 
 class HypTree:
