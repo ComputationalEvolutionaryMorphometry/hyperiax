@@ -1,0 +1,27 @@
+name: Pytest on Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Pytest
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.11
+        
+    - name: Install dependencies
+      run: |
+        pip install . pytest
+        
+    - name: Run Pytest
+      run: make test
