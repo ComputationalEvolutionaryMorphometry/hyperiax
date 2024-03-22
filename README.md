@@ -12,10 +12,6 @@ Initially, Hyperiax was designed specifically for phylogenetic analysis of biolo
 
 ## Installation
 ```bash
-# Create a separate environment (Recommended)
-conda create -n hyperiax python==3.12.1 -y
-conda activate hyperiax
-
 # Install Hyperiax directly using pip
 pip install hyperiax
 
@@ -91,4 +87,4 @@ See [Examples](https://github.com/ComputationalEvolutionaryMorphometry/hyperiax/
 Contributions, issues and feature requests are all welcome! Please refer to the [contributing guidelines](./CONTRIBUTION.md) before you want to contribute to the project.
 
 ## Contact
-If you have questions, please contact: 
+If you experience problems or have technical questions, please open an issue. For questions related to the Hyperiax project or CCEM, please contact [Stefan Sommer](mailto:sommer@di.ku.dk).
