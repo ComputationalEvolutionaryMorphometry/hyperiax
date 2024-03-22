@@ -21,7 +21,7 @@ jobs:
         
     - name: Install dependencies
       run: |
-        pip install hyperiax
+        pip install .
         
     - name: Run Pytest
       run: make test
