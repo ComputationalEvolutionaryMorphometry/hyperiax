@@ -37,23 +37,18 @@ def asymmetric_tree(h: int):
     if h < 0:
         raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
     elif h == 0:
-        return HypTree(TreeNode())
+        return HypTree(ChildList([TreeNode()]))
 
-    # build asymmetric tree
-    root = TreeNode(children=[TreeNode(),TreeNode()])
-
-    root.children[0].parent = root
-    root.children[1].parent = root
-
-    node = root.children[1]
+    # Fake root 
+    root = TreeNode(); root.parent = None; root.children = ChildList()
+    root.children = [TreeNode(children=ChildList(),parent=root), TreeNode(children=ChildList(),parent=root)]
+   
+    node = root.children[0]
 
     for _ in range(h - 1):
-        node.children = [TreeNode(),TreeNode()]
-    
-        node.children[0].parent = node
-        node.children[1].parent = node
-
-        node = node.children[1]
+        node.children = ChildList()
+        node.children=  [TreeNode(children=ChildList(),parent=node), TreeNode(children=ChildList(),parent=node)]
+        node = node.children[0]
 
     tree = HypTree(root)
     return tree 
