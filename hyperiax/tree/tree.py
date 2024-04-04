@@ -97,21 +97,6 @@ class HypTree:
                 queue.extend(current.children)
             yield current
 
-
-    def iter_dfs(self):
-        """Iterate over all of the nodes in a depth-first manner.
-
-        Yields:
-            iterator: An iterator that runs over the nodes.
-        """
-        stack = deque([self.root])
-
-        while stack:
-            current = stack.pop()
-            if current.children:
-                stack.extend(reversed(current.children))
-            yield current
-
     def iter_levels(self):
         """Iterate over each level in the tree
 
@@ -129,28 +114,68 @@ class HypTree:
             if children := queue.popleft().children:
                 buffer_queue.extend(children)
 
-    def iter_leaves_dfs(self):
-        """Iterates over the leaves in the tree using depth-first search.
-
-        Yields:
-            iterator: An iterator that runs over the leaves.
-        """
-        stack = deque([self.root])
-
-        while stack:
-            current = stack.pop()
-            if current.children:
-                stack.extend(reversed(current.children))
-            else:
-                yield current
-
     def plot_tree_2d(self, ax=None, selector=None):
-        from .plot_utils import plot_tree_2d_
-        plot_tree_2d_(self, ax, selector)
+        from matplotlib import pyplot as plt
+        from matplotlib import patches as mpatch
 
-    def plot_tree(self, ax=None,inc_names=False):
-        from .plot_utils import plot_tree_
-        plot_tree_(self, ax,inc_names)
+        tree = 'partial'
+        for node in self.iter_bfs():
+            if node.data == None: break
+        else:
+            tree = 'full'
+
+        cmap = plt.cm.ocean
+
+        if ax == None:
+            fig,ax = plt.subplots(figsize=(10,8))
+        if tree == 'full':
+            levels = list(self.iter_levels())
+
+            for i, level in enumerate(levels):
+                for node in level:
+                    dat = selector(node.data) if selector else node.data
+                    if node.children:
+                        for child in node.children:
+                            cdat = selector(child.data) if selector else child.data
+                            ax.arrow(*dat, *(cdat-dat), width=0.01, length_includes_head=True, color='gray')
+                    ax.scatter(*dat, color=cmap(i/len(levels)))
+                    if 'name' in node.data.keys():
+                        ax.annotate(node.data['name'], dat, xytext=(5,5), textcoords='offset pixels')
+
+            handles = [mpatch.Patch(color=cmap(i/len(levels)), label = f'{i+1}') for i in range(len(levels))]
+            legend = ax.legend(handles=handles, title="Levels")
+            ax.add_artist(legend)
+            ax.grid(True)
+
+    def plot_tree(self, ax=None):
+        import matplotlib.pyplot as plt
+        def get_depth(node):
+            """Recursively find the maximum depth of the tree."""
+            if not hasattr(node, 'children') or not node.children:
+                return 0
+            return 1 + max(get_depth(child) for child in node.children)
+
+        def plot_node(node, depth, x=0, y=0, dx=1, parent_pos=None):
+            """Plot a single node and its children, spreading them equally."""
+            plt.plot(x, y, 'ko')  # Plot the current node
+            if parent_pos:
+                plt.plot([parent_pos[0], x], [parent_pos[1], y], 'k-')  # Draw line to parent
+
+            if hasattr(node, 'children') and node.children:
+                n_children = len(node.children)
+                width = dx * (2 ** (max_depth - depth - 1))  # Calculate spread based on depth
+                start_x = x - width / 2 + width / (2 * n_children)  # Starting x position for children
+                for i, child in enumerate(node.children):
+                    child_x = start_x + i * (width / n_children)
+                    plot_node(child, depth + 1, child_x, y - vertical_spacing, dx, (x, y))
+
+        max_depth = get_depth(self.root)
+        vertical_spacing = 1.5  # Vertical spacing between levels
+
+        plt.figure(figsize=(10, 8))
+        plot_node(self.root, 0, 0, max_depth * vertical_spacing, dx=1)
+        plt.axis('off')
+        plt.show()
 
     def plot_tree_text(self):
         from .printer_utils import HypTreeFormatter
