@@ -108,7 +108,7 @@ class HypTree:
         while stack:
             current = stack.pop()
             if current.children:
-                stack.extend(reversed(current.children))
+                stack.extend(current.children)
             yield current
 
     def iter_levels(self):

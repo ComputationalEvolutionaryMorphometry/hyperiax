@@ -40,13 +40,14 @@ def asymmetric_tree(h: int):
 
     # Fake root 
     root = TreeNode(); root.parent = None; root.children = ChildList()
-    root.children = [TreeNode(children=ChildList(),parent=root), TreeNode(children=ChildList(),parent=root)]
+    root.children = ChildList([TreeNode(children=ChildList(),parent=root), TreeNode(children=ChildList(),parent=root)])
    
     node = root.children[0]
 
     for _ in range(h - 1):
-        node.children = ChildList()
-        node.children=  [TreeNode(children=ChildList(),parent=node), TreeNode(children=ChildList(),parent=node)]
+       # node.children = ChildList()
+        node.children=  ChildList([TreeNode(children=ChildList(),parent=node), TreeNode(children=ChildList(),parent=node)])
+
         node = node.children[0]
 
     tree = HypTree(root)
