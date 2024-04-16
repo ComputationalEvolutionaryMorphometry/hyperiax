@@ -26,7 +26,6 @@ def symmetric_tree(h: int, degree: int, new_node: Type[TreeNode] = TreeNode, fak
         fake_root.children = ChildList([_builder(h + 1, degree, fake_root)])
         return HypTree(root=fake_root)
 
-
 def asymmetric_tree(h: int):
     """Generate tree of given height
 
@@ -37,27 +36,22 @@ def asymmetric_tree(h: int):
     if h < 0:
         raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
     elif h == 0:
-        return HypTree(TreeNode())
+        return HypTree(ChildList([TreeNode()]))
 
-    # build asymmetric tree
-    root = TreeNode(children=[TreeNode(),TreeNode()])
-
-    root.children[0].parent = root
-    root.children[1].parent = root
-
-    node = root.children[1]
+    # Fake root 
+    root = TreeNode(); root.parent = None; root.children = ChildList()
+    root.children = ChildList([TreeNode(children=ChildList(),parent=root), TreeNode(children=ChildList(),parent=root)])
+   
+    node = root.children[0]
 
     for _ in range(h - 1):
-        node.children = [TreeNode(),TreeNode()]
-    
-        node.children[0].parent = node
-        node.children[1].parent = node
+       # node.children = ChildList()
+        node.children=  ChildList([TreeNode(children=ChildList(),parent=node), TreeNode(children=ChildList(),parent=node)])
 
-        node = node.children[1]
+        node = node.children[0]
 
     tree = HypTree(root)
     return tree 
-
 
 ### Tree generation and initialization
 def tree_from_newick(newick_str):
