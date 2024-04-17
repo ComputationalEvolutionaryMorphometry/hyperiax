@@ -165,7 +165,7 @@ cython_debug/
 #.idea/
 
 legacy/
-docs/
+# docs/
 data/
 todo
 changelog
