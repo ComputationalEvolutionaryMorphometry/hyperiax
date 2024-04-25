@@ -3,15 +3,15 @@ from __future__ import annotations
 import copy
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Type, Dict, List, Iterator
 from .childrenlist import ChildList
 
 
 @dataclass(repr=False)
 class TreeNode:
     """
-    The data nodes within a tree, stupid by design. 
-    Functionality is in JaxTree    
+    The data nodes within a tree
+
     """
     parent : TreeNode = None
     data : Dict = field(default_factory=dict)
@@ -25,13 +25,20 @@ class TreeNode:
     def __getitem__(self, arg):
         return self.data.__getitem__(arg)
 
-    def __setitem__(self, key, arg):
+    def __setitem__(self, key: str, arg):
         self.data.__setitem__(key, arg)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str):
         self.data.__delitem__(key)
 
-    def add_child(self, child):
+    def add_child(self, child: Type[TreeNode]) -> Type[TreeNode]:
+        """ 
+        Add an individual child to the node
+
+        :param child: child node to be added
+        :return: the child node
+
+        """
         child.parent = self
         self.children._add_child(child)
         return child
@@ -39,9 +46,11 @@ class TreeNode:
 
 
 class HypTree:
-    """The tree class that wraps behavious around a set of nodes.
+    """
+    The tree class that wraps behavious around a set of nodes.
 
     The set of nodes is given via the `root` node, and can be iterated conveniently using the utility in this class.
+
     """
     def __init__(self, root : TreeNode) -> None:
         self.root = root
@@ -65,15 +74,21 @@ class HypTree:
             for node in self.iter_bfs():
                 node.data.__setitem__(key, arg)
     
-    def copy(self):
+    def copy(self) -> Type[HypTree]:
+        """
+        Returns a copy of the tree
+
+        :return: a copy of the tree
+
+        """
         return copy.deepcopy(self)
 
-    def iter_leaves(self):
-        """Iterates over the leaves in the tree
-
-        Yields:
-            iterator: an interator that runs over the leaves.
+    def iter_leaves(self) -> Iterator[TreeNode]:
         """
+        Iterate over all of the leaves in the tree
+
+        """
+
         queue = deque([self.root])
 
         while queue:
@@ -83,11 +98,10 @@ class HypTree:
             else:
                 yield current
 
-    def iter_bfs(self):
-        """Iterate over all of the nodes in a breadth first manner
+    def iter_bfs(self) -> Iterator[TreeNode]:
+        """
+        Iterate over all of the nodes in a breadth first manner
 
-        Yields:
-            iterator: an iterator that runs over the nodes
         """
         queue = deque([self.root])
 
@@ -97,11 +111,10 @@ class HypTree:
                 queue.extend(current.children)
             yield current
 
-    def iter_dfs(self):
-        """Iterate over all of the nodes in a depth-first manner.
+    def iter_dfs(self) -> Iterator[TreeNode]:
+        """
+        Iterate over all of the nodes in a depth-first manner.
 
-        Yields:
-            iterator: An iterator that runs over the nodes.
         """
         stack = deque([self.root])
 
@@ -111,11 +124,10 @@ class HypTree:
                 stack.extend(current.children)
             yield current
 
-    def iter_levels(self):
-        """Iterate over each level in the tree
+    def iter_levels(self) -> Iterator[List[TreeNode]]:
+        """
+        Iterate over each level in the tree
 
-        Yields:
-            iterator: an iterator that runs over each level
         """
         queue = deque()
         buffer_queue = deque([self.root])
@@ -128,11 +140,11 @@ class HypTree:
             if children := queue.popleft().children:
                 buffer_queue.extend(children)
 
-    def iter_leaves_dfs(self):
-        """Iterates over the leaves in the tree using depth-first search.
+    def iter_leaves_dfs(self) -> Iterator[TreeNode]:
+        """
+        Iterates over the leaves in the tree using depth-first search.
 
-        Yields:
-            iterator: An iterator that runs over the leaves.
+        ??? Duplicate of iter_leaves
         """
         stack = deque([self.root])
 
