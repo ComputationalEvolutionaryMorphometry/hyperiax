@@ -1,12 +1,13 @@
 # Functions for plotting data and tree
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib import patches as mpatch
 
 
 #####################################################################################################
 # 2d plot of data points in a 
 
 def plot_tree_2d_(self, ax=None, selector=None):
-    from matplotlib import pyplot as plt
-    from matplotlib import patches as mpatch
 
     tree = 'partial'
     for node in self.iter_bfs():
