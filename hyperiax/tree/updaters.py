@@ -1,13 +1,18 @@
-
 from . import HypTree, TreeNode
-from jax.random import PRNGKey, split
+from jax.random import split
 import jax
-import jax.numpy as jnp
-import copy
 from typing import Callable
-from functools import partial
 
-def update_noise_inplace(update_f: Callable[[TreeNode,float],float], tree : HypTree, key=False, save_noise=False) -> HypTree:
+def update_noise_inplace(update_f: Callable[[TreeNode,float],float], tree : HypTree, key: jax.random.PRNGKey=jax.random.PRNGKey(0), save_noise: bool=False) -> HypTree:
+    """
+    Update the noise in each node of the tree, inplace.
+
+    :param update_f: the way to update the noise
+    :param tree: The tree to update the noise in
+    :param key: The key to generate the noise with, defaults to jax.random.PRNGKey(0)
+    :param save_noise: Whether to save the old noise, defaults to False
+    :return: The tree with updated noise
+    """
     for node in tree.iter_bfs():
         subkey, key = split(key)
         if save_noise:

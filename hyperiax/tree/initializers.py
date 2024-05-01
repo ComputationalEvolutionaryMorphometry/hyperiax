@@ -1,13 +1,14 @@
 from typing import Tuple
 from . import HypTree
-from jax.random import PRNGKey, split
+from jax.random import split
 import jax
 import jax.numpy as jnp
 import copy
 
-def initialize_noise(tree : HypTree, key : PRNGKey, shape: Tuple) -> HypTree:
-    """ Initializes a random value of shape `shape` with key `noise` in each node,
-        and returns a new tree with the noise inserted.
+def initialize_noise(tree : HypTree, key : jax.random.PRNGKey, shape: tuple) -> HypTree:
+    """ 
+    Initializes a random value of shape `shape` with key `noise` in each node,
+    and returns a new tree with the noise inserted.
 
     :param tree: The tree to initialize the noise in
     :param key: The key to generate the noise with
@@ -20,8 +21,9 @@ def initialize_noise(tree : HypTree, key : PRNGKey, shape: Tuple) -> HypTree:
 
     return new_tree
 
-def initialize_noise_inplace(tree : HypTree, key : PRNGKey, shape: Tuple) -> HypTree:
-    """ Initializes a random value of shape `shape` with key `noise` in each node, inplace.
+def initialize_noise_inplace(tree : HypTree, key : jax.random.PRNGKey, shape: tuple) -> HypTree:
+    """ 
+    Initializes a random value of shape `shape` with key `noise` in each node, inplace.
 
     :param tree: The tree to initialize the noise in
     :param key: The key to generate the noise with
@@ -34,9 +36,10 @@ def initialize_noise_inplace(tree : HypTree, key : PRNGKey, shape: Tuple) -> Hyp
 
     return tree
 
-def initialize_noise_leaves(tree : HypTree, key : PRNGKey, shape: Tuple) -> HypTree:
-    """ Initializes a random value of shape `shape` with key `noise` in each leaf,
-        and returns a new tree with the noise inserted.
+def initialize_noise_leaves(tree : HypTree, key : jax.random.PRNGKey, shape: tuple) -> HypTree:
+    """ 
+    Initializes a random value of shape `shape` with key `noise` in each leaf,
+    and returns a new tree with the noise inserted.
 
     :param tree: The tree to initialize the noise in
     :param key: The key to generate the noise with
@@ -49,8 +52,9 @@ def initialize_noise_leaves(tree : HypTree, key : PRNGKey, shape: Tuple) -> HypT
 
     return new_tree
 
-def initialize_noise_leaves_inplace(tree : HypTree, key : PRNGKey, shape) -> HypTree:
-    """ Initializes a random value of shape `shape` with key `noise` in each leaf, inplace.
+def initialize_noise_leaves_inplace(tree : HypTree, key : jax.random.PRNGKey, shape: tuple) -> HypTree:
+    """ 
+    Initializes a random value of shape `shape` with key `noise` in each leaf, inplace.
 
     :param tree: The tree to initialize the noise in
     :param key: The key to generate the noise with

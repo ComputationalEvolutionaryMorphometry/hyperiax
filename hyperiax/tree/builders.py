@@ -1,12 +1,10 @@
-from typing import Type
-
 from . import HypTree, TreeNode
 from .childrenlist import ChildList
 
 
-def symmetric_tree(h: int, degree: int, new_node: TreeNode = TreeNode, fake_root: TreeNode = None) -> HypTree:
-    """ Generate a tree of given height and degree
-
+def symmetric_tree(h: int, degree: int, new_node: any=TreeNode, fake_root: any=None) -> HypTree:
+    """ 
+    Generate a tree of given height and degree.
     A tree of height zero contains just the root;
     a tree of height one contains the root and one level of leaves below it, and so forth.
 
@@ -33,8 +31,8 @@ def symmetric_tree(h: int, degree: int, new_node: TreeNode = TreeNode, fake_root
         return HypTree(root=fake_root)
 
 def asymmetric_tree(h: int) -> HypTree:
-    """ Generate an asymmetric binary tree of given height
-
+    """ 
+    Generate an asymmetric binary tree of given height.
     A tree of height zero contains just the root;
     a tree of height one contains the root and one level of leaves below it, and so forth.
 
@@ -64,7 +62,8 @@ def asymmetric_tree(h: int) -> HypTree:
 
 ### Tree generation and initialization
 def tree_from_newick(newick_str: str) -> HypTree:
-    """ Generate a tree from a Newick string.
+    """ 
+    Generate a tree from a Newick string.
 
     :param newick_str: newick string representation
     :return: The constructed tree
@@ -121,7 +120,8 @@ def tree_from_newick(newick_str: str) -> HypTree:
 
 ### Alternative Newick tree generation
 def tree_from_newick_recursive(newick_str: str) -> HypTree:
-    """ Generate a tree from a Newick string recursively.
+    """ 
+    Generate a tree from a Newick string recursively.
 
     :param newick_str: newick string representation
     :return: The constructed tree
