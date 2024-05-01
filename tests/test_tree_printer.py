@@ -1,5 +1,5 @@
 from hyperiax.tree.builders import symmetric_tree, tree_from_newick_recursive, tree_from_newick
-from hyperiax.tree.printer_utils import HypTreeFormatter
+from hyperiax.tree.plot_utils import HypTreeFormatter
 
 def test_tree_formatter():
     tree = symmetric_tree(h=4, degree=3)
