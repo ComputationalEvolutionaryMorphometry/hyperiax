@@ -1,15 +1,12 @@
-from typing import Type
-
 from . import HypTree, TreeNode
 from .childrenlist import ChildList
 
 
-def symmetric_tree(h : int, degree : int, new_node : TreeNode = TreeNode, fake_root : TreeNode = None) -> HypTree:
-    """ Generate tree of given height and degree
-
+def symmetric_tree(h: int, degree: int, new_node: any=TreeNode, fake_root: any=None) -> HypTree:
+    """ 
+    Generate a tree of given height and degree.
     A tree of height zero contains just the root;
-    a tree of height one contains the root and one level of leaves below it,
-    and so forth.
+    a tree of height one contains the root and one level of leaves below it, and so forth.
 
     :param h: The height of the tree
     :param degree: The degree of each node in the tree
@@ -33,12 +30,15 @@ def symmetric_tree(h : int, degree : int, new_node : TreeNode = TreeNode, fake_r
         fake_root.children = ChildList([_builder(h + 1, degree, fake_root)])
         return HypTree(root=fake_root)
 
-def asymmetric_tree(h: int):
-    """Generate tree of given height
-
+def asymmetric_tree(h: int) -> HypTree:
+    """ 
+    Generate an asymmetric binary tree of given height.
     A tree of height zero contains just the root;
-    a tree of height one contains the root and one level of leaves below it,
-    and so forth.
+    a tree of height one contains the root and one level of leaves below it, and so forth.
+
+    :param h: The height of the tree
+    :raises ValueError: If height is negative
+    :return: The constructed tree
     """
     if h < 0:
         raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
@@ -61,8 +61,13 @@ def asymmetric_tree(h: int):
     return tree 
 
 ### Tree generation and initialization
-def tree_from_newick(newick_str):
-    """Generate a JaxTree from a Newick string."""
+def tree_from_newick(newick_str: str) -> HypTree:
+    """ 
+    Generate a tree from a Newick string.
+
+    :param newick_str: newick string representation
+    :return: The constructed tree
+    """
     def parse_newick(newick_str):
         k = -1
         root = current_node = TreeNode(children=[])  # Start with a root node
@@ -114,7 +119,13 @@ def tree_from_newick(newick_str):
 
 
 ### Alternative Newick tree generation
-def tree_from_newick_recursive(newick_str):
+def tree_from_newick_recursive(newick_str: str) -> HypTree:
+    """ 
+    Generate a tree from a Newick string recursively.
+
+    :param newick_str: newick string representation
+    :return: The constructed tree
+    """
     import re
 
     iter_tokens = re.finditer(r"([^:;,()\s]*)(?:\s*:\s*([\d.]+)\s*)?([,);])|(\S)", newick_str+";")
@@ -140,4 +151,4 @@ def tree_from_newick_recursive(newick_str):
             
         return node, delim
     
-    return recursive_parse_newick()[0]
+    return HypTree(recursive_parse_newick()[0])
