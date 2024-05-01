@@ -3,7 +3,10 @@ from matplotlib import pyplot as plt
 
 # trace plots for MCMC
 def trace_plots(samples):
-    """ Trace plots """
+    """ Trace plots 
+    
+    :param samples: A list of ParameterStore objects.
+    """
 
     # Determine grid layout
     num_params = len(samples[0])
