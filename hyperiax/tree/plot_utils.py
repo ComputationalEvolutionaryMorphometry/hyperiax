@@ -88,7 +88,9 @@ def plot_node(parent,ax,inc_names):
         from matplotlib import pyplot as plt
         """Plot a single node and its children"""
         ax.plot(parent.data["x_temp"], parent.data["y_temp"], 'ko')  # Plot the current node
-
+        if inc_names and parent.name is not None:
+            ax.text(parent.data["x_temp"], parent.data["y_temp"], parent.name+" ", fontdict=None,rotation="vertical",va="top",ha="center")
+            # Draw vertical line from parent to current level
         for child in parent.children:
             ax.plot(child.data["x_temp"], child.data["y_temp"], 'ko')
 
