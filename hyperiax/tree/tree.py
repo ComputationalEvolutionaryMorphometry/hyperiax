@@ -160,8 +160,9 @@ class HypTree:
         plot_tree_2d_(self, ax, selector)
 
     def plot_tree(self, ax=None,inc_names=False):
+        tree = self.copy()
         from .plot_utils import plot_tree_
-        plot_tree_(self, ax,inc_names)
+        plot_tree_(tree, ax,inc_names)
 
     def plot_tree_text(self):
         from .printer_utils import HypTreeFormatter
