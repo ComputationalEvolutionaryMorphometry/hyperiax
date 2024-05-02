@@ -30,7 +30,7 @@ class UpLambda(UpModel):
         return self.fuse_fn(*args, **kwargs)
     
 class UpDownLambda(UpDownModel):
-    """Lambda model that only contains both an up and down interface.    Requires an up, fuse and down function.
+    """Lambda model that only contains both an up and down interface.  
 
     :param UpDownModel: Requires an up, fuse and down function.
     """
@@ -81,7 +81,7 @@ class DownLambda(DownModel):
         return self.down_fn(*args, **kwargs)
     
 class UpdateLambda(UpdateModel):
-    """L ambda model that only contains a local update interface
+    """Lambda model that only contains a local update interface
 
     :param UpdateModel: Requires an update function.
     """

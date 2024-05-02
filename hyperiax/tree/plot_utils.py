@@ -93,9 +93,8 @@ def plot_node(parent,ax,inc_names):
             ax.plot(child.data["x_temp"], child.data["y_temp"], 'ko')
 
             # Include text 
-            if inc_names:
-                if child.name is not None:
-                    ax.text(child.data["x_temp"], child.data["y_temp"], child.name+" ", fontdict=None,rotation="vertical",va="top",ha="center")
+            if inc_names and child.name is not None:
+                ax.text(child.data["x_temp"], child.data["y_temp"], child.name+" ", fontdict=None,rotation="vertical",va="top",ha="center")
             # Draw vertical line from parent to current level
             ax.plot([child.data["x_temp"], parent.data["x_temp"]], [parent.data["y_temp"], parent.data["y_temp"]], 'k-')
             # Draw horizontal line to child
