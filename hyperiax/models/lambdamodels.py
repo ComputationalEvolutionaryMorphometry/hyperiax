@@ -2,7 +2,7 @@ from .updownmodel import UpModel, UpDownModel, DownModel
 from .updatemodel import UpdateModel
 
 class UpLambda(UpModel):
-    """Lambda model that only contains an up interface
+    """ Lambda model that only contains an up interface
 
     :param UpModel: Requires an up and fuse function.
     """
@@ -66,7 +66,7 @@ class DownLambda(DownModel):
     """
 
     def __init__(self, down_fn) -> None:
-        """Initialize DownLambda model
+        """ Initialize DownLambda model
 
         :param down_fn: function to define values to fuse function
         """
@@ -75,7 +75,7 @@ class DownLambda(DownModel):
         self.down_fn = down_fn
     
     def down(self, *args, **kwargs):
-        """ down function to define values to fuse function
+        """ Down function to define values to fuse function
         :return: input arguments to fuse function
         """
         return self.down_fn(*args, **kwargs)
@@ -86,7 +86,7 @@ class UpdateLambda(UpdateModel):
     :param UpdateModel: Requires an update function.
     """
     def __init__(self, update_fn) -> None:
-        """Initialize DownLambda model
+        """ Initialize DownLambda model
 
         :param down_fn: function to define values to fuse function
         """
