@@ -44,19 +44,19 @@ def estimate_position(self):
     """ Estimate the x and y coordinates of each point """
     
     # Determine Y coordinates, with distance from root 
-    self.root.data["y"] = 0
+    self.root.data["y_temp"] = 0
     for leaf in self.iter_dfs():
         # initlize an empty x coordinate for later 
-        leaf.data["x"] = 0
+        leaf.data["x_temp"] = 0
         if leaf.parent is not None: # Skip root
             if 'edge_length' in leaf.data.keys():
-                leaf.data["y"] = leaf.parent.data["y"] -leaf.data["edge_length"] 
+                leaf.data["y_temp"] = leaf.parent.data["y_temp"] -leaf.data["edge_length"] 
 
             else: 
-                leaf.data["y"] = leaf.parent.data["y"] - 1
+                leaf.data["y_temp"] = leaf.parent.data["y_temp"] - 1
     # Define x coordinate for each leaf 
     for i,leaf in enumerate(self.iter_leaves_dfs()):
-        leaf.data["x"] = i
+        leaf.data["x_temp"] = i
 
 
     # Determine X coordinates from bottom and up 
@@ -66,8 +66,8 @@ def estimate_position(self):
                     x_coordinate = 0
                     leaf = leaf.parent
                     for i,node in enumerate(leaf.children):
-                        x_coordinate += node.data["x"]
-                    leaf.data["x"] = x_coordinate/(i+1)
+                        x_coordinate += node.data["x_temp"]
+                    leaf.data["x_temp"] = x_coordinate/(i+1)
     return self 
      
 def plot_tree_(self,ax=None,inc_names=False): 
@@ -78,7 +78,7 @@ def plot_tree_(self,ax=None,inc_names=False):
         fig,ax = plt.subplots(figsize=(10,8))
 
     self = estimate_position(self)
-    ax.plot(self.root.data["x"], self.root.data["y"], 'ko')  # Plot the current node
+    ax.plot(self.root.data["x_temp"], self.root.data["y_temp"], 'ko')  # Plot the current node
     ax.axis('off')
     for leaf in self.iter_bfs():
         if len(leaf.children) != 0:
@@ -87,17 +87,19 @@ def plot_tree_(self,ax=None,inc_names=False):
 def plot_node(parent,ax,inc_names):
         from matplotlib import pyplot as plt
         """Plot a single node and its children"""
-        ax.plot(parent.data["x"], parent.data["y"], 'ko')  # Plot the current node
-
+        ax.plot(parent.data["x_temp"], parent.data["y_temp"], 'ko')  # Plot the current node
+        if inc_names and parent.name is not None:
+            ax.text(parent.data["x_temp"], parent.data["y_temp"], parent.name+" ", fontdict=None,rotation="vertical",va="top",ha="center")
+            # Draw vertical line from parent to current level
         for child in parent.children:
-            ax.plot(child.data["x"], child.data["y"], 'ko')
+            ax.plot(child.data["x_temp"], child.data["y_temp"], 'ko')
 
             # Include text 
-            if inc_names:
-                if child.name is not None:
-                    ax.text(child.data["x"], child.data["y"], child.name, fontdict=None,rotation="vertical",va="top",ha="center")
+            if inc_names and child.name is not None:
+                ax.text(child.data["x_temp"], child.data["y_temp"], child.name+" ", fontdict=None,rotation="vertical",va="top",ha="center")
             # Draw vertical line from parent to current level
-            ax.plot([child.data["x"], parent.data["x"]], [parent.data["y"], parent.data["y"]], 'k-')
+            ax.plot([child.data["x_temp"], parent.data["x_temp"]], [parent.data["y_temp"], parent.data["y_temp"]], 'k-')
             # Draw horizontal line to child
-            ax.plot([child.data["x"], child.data["x"]], [parent.data["y"], child.data["y"]], 'k-') 
+            ax.plot([child.data["x_temp"], child.data["x_temp"]], [parent.data["y_temp"], child.data["y_temp"]], 'k-') 
+
 
