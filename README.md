@@ -1,6 +1,6 @@
 # Hyperiax: Tree traversals using JAX
 <p align="center">
- <img width="300", height="250" src="./doc/figures/hyperiax_logo.png">
+ <img width="300", height="250" src="./docs/figures/hyperiax_logo.png">
 </p>
 
 

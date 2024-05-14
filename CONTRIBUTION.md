@@ -60,6 +60,40 @@ git push origin my-dev
 - Write docstrings for all public classes, methods, and functions.
 - Do not use any stateful randomness. ie. a PRNGKey should only be passed to a constructor if it is immediately disposed.
 
+### Docstrings Style
+In order to fit the Sphinx's automatic docstring generation, we recommend to document the functions in the default [Sphinx style](https://www.sphinx-doc.org/en/master/tutorial/describing-code.html#documenting-python-objects), for example:
+``` python
+def symmetric_tree(h : int, degree : int, new_node : TreeNode = TreeNode, fake_root : TreeNode = None) -> HypTree:
+    """ Generate tree of given height and degree
+
+    A tree of height zero contains just the root;
+    a tree of height one contains the root and one level of leaves below it,
+    and so forth.
+
+    :param h: The height of the tree
+    :param degree: The degree of each node in the tree
+    :param new_node: The node used to construct the tree, defaults to TreeNode
+    :param fake_root: The fake root node, defaults to None
+    :raises ValueError: If height is negative
+    :return: The constructed tree
+    """
+    if h < 0:
+        raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
+
+    def _builder(h: int, degree: int, parent):
+        node = new_node(); node.parent = parent; node.children = ChildList()
+        if h > 1:
+            node.children = ChildList([_builder(h - 1, degree, node) for _ in range(degree)])
+        return node
+
+    if fake_root is None:
+        return HypTree(root=_builder(h + 1, degree, None))
+    else:
+        fake_root.children = ChildList([_builder(h + 1, degree, fake_root)])
+        return HypTree(root=fake_root)
+```
+If you are using VScode, it is easy to generate such template automatically using the [autoDocstring extension](https://marketplace.visualstudio.com/items?itemName=njpwerner.autodocstring). After installation, open the extension settings and choose `sphinx-notypes` under `Docstring Format` tab.
+
 ### Testing
 
 - Write tests for new features and bug fixes.
