@@ -60,19 +60,19 @@ def estimate_position(tree: HypTree) -> HypTree:
     """
     
     # Determine Y coordinates, with distance from root 
-    tree.root.data["y"] = 0
+    tree.root.data["y_temp"] = 0
     for leaf in tree.iter_dfs():
         # initlize an empty x coordinate for later 
-        leaf.data["x"] = 0
+        leaf.data["x_temp"] = 0
         if leaf.parent is not None: # Skip root
             if 'edge_length' in leaf.data.keys():
-                leaf.data["y"] = leaf.parent.data["y"] -leaf.data["edge_length"] 
+                leaf.data["y_temp"] = leaf.parent.data["y_temp"] -leaf.data["edge_length"] 
 
             else: 
-                leaf.data["y"] = leaf.parent.data["y"] - 1
+                leaf.data["y_temp"] = leaf.parent.data["y_temp"] - 1
     # Define x coordinate for each leaf 
     for i,leaf in enumerate(tree.iter_leaves_dfs()):
-        leaf.data["x"] = i
+        leaf.data["x_temp"] = i
 
 
     # Determine X coordinates from bottom and up 
@@ -82,8 +82,8 @@ def estimate_position(tree: HypTree) -> HypTree:
                     x_coordinate = 0
                     leaf = leaf.parent
                     for i,node in enumerate(leaf.children):
-                        x_coordinate += node.data["x"]
-                    leaf.data["x"] = x_coordinate/(i+1)
+                        x_coordinate += node.data["x_temp"]
+                    leaf.data["x_temp"] = x_coordinate/(i+1)
     return tree
      
 def plot_tree_(tree: HypTree, ax: Any=None, inc_names: bool=False) -> None: 
@@ -98,34 +98,35 @@ def plot_tree_(tree: HypTree, ax: Any=None, inc_names: bool=False) -> None:
     if ax == None:
         fig, ax = plt.subplots(figsize=(10,8))
 
-    tree_est = estimate_position(tree)
-    ax.plot(tree_est.root.data["x"], tree_est.root.data["y"], 'ko')  # Plot the current node
+    tree = estimate_position(tree)
+    ax.plot(tree.root.data["x_temp"], tree.root.data["y_temp"], 'ko')  # Plot the current node
     ax.axis('off')
-    for leaf in tree_est.iter_bfs():
+    for leaf in tree.iter_bfs():
         if len(leaf.children) != 0:
             plot_node(leaf, ax, inc_names)
 
 def plot_node(parent: TreeNode, ax: Any, inc_names: bool) -> None:
     """
-    Plot the current node and its children
+    Plot a single node and its children
 
     :param parent: the parent node to plot
     :param ax: the axis to plot the node on
     :param inc_names: whether to include the names of the nodes in the plot
     """
-    ax.plot(parent.data["x"], parent.data["y"], 'ko')  # Plot the current node
-
+    ax.plot(parent.data["x_temp"], parent.data["y_temp"], 'ko')  # Plot the current node
+    if inc_names and parent.name is not None:
+        ax.text(parent.data["x_temp"], parent.data["y_temp"], parent.name+" ", fontdict=None,rotation="vertical",va="top",ha="center")
+        # Draw vertical line from parent to current level
     for child in parent.children:
-        ax.plot(child.data["x"], child.data["y"], 'ko')
+        ax.plot(child.data["x_temp"], child.data["y_temp"], 'ko')
 
         # Include text 
-        if inc_names:
-            if child.name is not None:
-                ax.text(child.data["x"], child.data["y"], child.name, fontdict=None,rotation="vertical",va="top",ha="center")
+        if inc_names and child.name is not None:
+            ax.text(child.data["x_temp"], child.data["y_temp"], child.name+" ", fontdict=None,rotation="vertical",va="top",ha="center")
         # Draw vertical line from parent to current level
-        ax.plot([child.data["x"], parent.data["x"]], [parent.data["y"], parent.data["y"]], 'k-')
+        ax.plot([child.data["x_temp"], parent.data["x_temp"]], [parent.data["y_temp"], parent.data["y_temp"]], 'k-')
         # Draw horizontal line to child
-        ax.plot([child.data["x"], child.data["x"]], [parent.data["y"], child.data["y"]], 'k-') 
+        ax.plot([child.data["x_temp"], child.data["x_temp"]], [parent.data["y_temp"], child.data["y_temp"]], 'k-') 
 
 
 ######################################################################################################

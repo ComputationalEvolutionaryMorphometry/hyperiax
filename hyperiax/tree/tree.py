@@ -171,8 +171,9 @@ class HypTree:
         :param ax: the axis to plot the tree on, if None, a new figure is created, defaults to None
         :param inc_names: whether to include the names of the nodes in the plot, defaults to False
         """
+        tree = self.copy()
         from .plot_utils import plot_tree_
-        plot_tree_(self, ax,inc_names)
+        plot_tree_(tree, ax,inc_names)
 
     def plot_tree_text(self) -> None:
         """
