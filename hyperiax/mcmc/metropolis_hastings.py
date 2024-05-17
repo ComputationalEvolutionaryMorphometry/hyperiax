@@ -21,7 +21,8 @@ def metropolis_hastings(log_target, proposal, data, init, num_samples, burn_in=0
     if rng_key is None:
         rng_key = jax.random.PRNGKey(0)
 
-    current_state = init
+    rng_key, subkey = jax.random.split(rng_key)
+    current_state = proposal(data, init, subkey)
     log_likelihood_current = log_target(data,current_state)
     log_likelihoods = []
     samples = []
