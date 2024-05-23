@@ -40,17 +40,6 @@ dev = [
     "mypy",
     "pytest",
 ]
-docs = [
-    "black",
-    "flake8",
-    "jupyter",
-    "matplotlib",
-    "mypy",
-    "pytest",
-    "sphinx",
-    "sphinx_rtd_theme",
-    "sphinx_autodoc_annotation",
-]
 
 [project.urls]
 Homepage = "https://github.com/computationalevolutionarymorphometry/hyperiax"
