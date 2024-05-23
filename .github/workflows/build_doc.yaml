@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - doc
   pull_request:
     branches:
       - main
@@ -14,30 +13,25 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs: 
-  # This workflow contains a single job called "build"
-  build: 
-    name: Run Sphinx build and publish to Github Page
-    # The type of runner that the job will run on
+  sphinx_docs_to_gh-pages:
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    name: Sphinx docs to gh-pages
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
-
-      - name: Set up Python
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup Python
         uses: actions/setup-python@v2
         with:
-           python-version: "3.11"
-        
-      - name: Install dependencies
-        run: | 
-          python -m pip install --upgrade pip
-          pip install sphinx sphinx-rtd-theme sphinx_autodoc_annotation ghp-import
-      - name: Build HTML
-        run: | 
-          cd docs/
-          make html
-      - name: Run ghp-import
-        run: | 
-          ghp-import -n -p -f ./docs/build/html
+          python-version: 3.10
+      - name: Installing the Documentation requirements
+        run: |
+          pip3 install .[dev]
+      - name: Running the Sphinx to gh-pages Action
+        uses: uibcdf/action-sphinx-docs-to-gh-pages@v2.1.0
+        with:
+          branch: main
+          dir_docs: docs
+          sphinx-apidoc-opts: '--separate -o . ../'
+          sphinx-apidoc-exclude: '../*setup* ../*.ipynb'
+          sphinx-opts: ''
