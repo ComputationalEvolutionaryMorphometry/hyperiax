@@ -19,6 +19,9 @@ permissions:
 jobs: 
   sphinx_docs_to_gh-pages:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write      
     name: Sphinx docs to gh-pages
     steps:
       - uses: actions/checkout@v3
