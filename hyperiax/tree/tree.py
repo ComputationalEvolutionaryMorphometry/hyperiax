@@ -3,8 +3,7 @@ from __future__ import annotations
 import copy
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Type, Dict, List, Iterator
-from .childrenlist import ChildList
+from typing import Any, Iterator, Callable
 
 
 @dataclass(repr=False)
@@ -14,24 +13,24 @@ class TreeNode:
 
     """
     parent : TreeNode = None
-    data : Dict = field(default_factory=dict)
-    children : List[TreeNode] = None
+    data : dict = field(default_factory=dict)
+    children : list[TreeNode] = None
     name : str = None
    
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'TreeNode({self.data}) with {len(self.children)} children' if self.children else f'TreeNode({self.data}) with no children'
 
-    def __getitem__(self, arg):
+    def __getitem__(self, arg: Any) -> Any:
         return self.data.__getitem__(arg)
 
-    def __setitem__(self, key: str, arg):
+    def __setitem__(self, key: str, arg: Any) -> None:
         self.data.__setitem__(key, arg)
 
-    def __delitem__(self, key: str):
+    def __delitem__(self, key: str) -> None:
         self.data.__delitem__(key)
 
-    def add_child(self, child: Type[TreeNode]) -> Type[TreeNode]:
+    def add_child(self, child: TreeNode) -> TreeNode:
         """ 
         Add an individual child to the node
 
@@ -62,11 +61,11 @@ class HypTree:
     def __len__(self) -> int:
         return len(list(self.iter_bfs()))
     
-    def __getitem__(self, arg):
+    def __getitem__(self, arg: Any) -> Iterator[Any]:
         for node in self.iter_bfs():
             yield node.data.__getitem__(arg)
 
-    def __setitem__(self, key, arg):
+    def __setitem__(self, key: str, arg: Any) -> None:
         if '__iter__' in getattr(arg, '__dict__', dict()):
             for node, value in zip(self.iter_bfs(), arg):
                 node.data.__setitem__(key, value)
@@ -74,7 +73,7 @@ class HypTree:
             for node in self.iter_bfs():
                 node.data.__setitem__(key, arg)
     
-    def copy(self) -> Type[HypTree]:
+    def copy(self) -> HypTree:
         """
         Returns a copy of the tree
 
@@ -124,7 +123,7 @@ class HypTree:
                 stack.extend(current.children)
             yield current
 
-    def iter_levels(self) -> Iterator[List[TreeNode]]:
+    def iter_levels(self) -> Iterator[list[TreeNode]]:
         """
         Iterate over each level in the tree
 
@@ -155,24 +154,49 @@ class HypTree:
             else:
                 yield current
 
-    def plot_tree_2d(self, ax=None, selector=None):
+    def plot_tree_2d(self, ax: Any=None, selector: Callable[[dict], Any]=None) -> None:
+        """
+        Visualize the tree data in 2D plane
+
+        :param ax: the axis to plot the tree on, if None, a new figure is created, defaults to None
+        :param selector: a function to select the specific data in the nodes to plot, if None, then all data is plotted, defaults to None
+        """
         from .plot_utils import plot_tree_2d_
         plot_tree_2d_(self, ax, selector)
 
-    def plot_tree(self, ax=None,inc_names=False):
+    def plot_tree(self, ax: Any=None, inc_names: bool=False) -> None:
+        """
+        Visualize the hierarchical structure of the tree
+
+        :param ax: the axis to plot the tree on, if None, a new figure is created, defaults to None
+        :param inc_names: whether to include the names of the nodes in the plot, defaults to False
+        """
         tree = self.copy()
         from .plot_utils import plot_tree_
         plot_tree_(tree, ax,inc_names)
 
-    def plot_tree_text(self):
-        from .printer_utils import HypTreeFormatter
+    def plot_tree_text(self) -> None:
+        """
+        Visualize the tree structure in the form of text, with minimal information except the structure
+        """
+        from .plot_utils import HypTreeFormatter
         formatter = HypTreeFormatter(self)
         formatter.print_tree()
 
-    def to_newick(self):
+    def to_newick(self) -> str:
+        """
+        Convert the tree structure into a Newick string
+
+        :return: the Newick string representation of the tree structure
+        """
         # Recursive function to convert tree to Newick string
-        def to_newick(node:TreeNode):
-            """Recursively generates a Newick string from a JaxNode tree."""
+        def node_to_newick(node:TreeNode) -> str:
+            """
+            Convert the tree Node to a Newick string
+
+            :param node: the node to convert to Newick string
+            :return: the Newick string representation of the node
+            """
             if node is None:
                 return ''
             
@@ -180,7 +204,7 @@ class HypTree:
             if node.children is not None:
                 for child in node.children:
 
-                    part = to_newick(child)
+                    part = node_to_newick(child)
                     parts.append(part)
                 
             # If the current node has children, enclose the children's string representation in parentheses
@@ -201,5 +225,4 @@ class HypTree:
                 # For the very rare case where a node might not have a name or children (unlikely in valid Newick)
                 return ''
 
-        """Converts a JaxTree to a Newick string."""
-        return  to_newick(self.root) + ';'
+        return node_to_newick(self.root) + ';'

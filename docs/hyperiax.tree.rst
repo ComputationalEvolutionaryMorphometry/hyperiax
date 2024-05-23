@@ -36,13 +36,6 @@ hyperiax.tree.plot\_utils module
    :undoc-members:
    :show-inheritance:
 
-hyperiax.tree.printer\_utils module
------------------------------------
-
-.. automodule:: hyperiax.tree.printer_utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 hyperiax.tree.tree module
 -------------------------
