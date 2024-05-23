@@ -11,34 +11,47 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pages: write          # <-- Add this line
+# permissions:
+#   contents: write
+#   pages: write          # <-- Add this line
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
-jobs: 
-  sphinx_docs_to_gh-pages:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pages: write      
-    name: Sphinx docs to gh-pages
+# # A workflow run is made up of one or more jobs that can run sequentially or in parallel
+# jobs: 
+#   sphinx_docs_to_gh-pages:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+#       pages: write      
+#     name: Sphinx docs to gh-pages
+#     steps:
+#       - uses: actions/checkout@v3
+#         with:
+#           fetch-depth: 0
+#       - name: Setup Python
+#         uses: actions/setup-python@v5.1.0
+#         with:
+#           python-version: 3.10.12
+#       - name: Installing the Documentation requirements
+#         run: |
+#           pip3 install .[dev]
+#       - name: Running the Sphinx to gh-pages Action
+#         uses: uibcdf/action-sphinx-docs-to-gh-pages@v2.1.0
+#         with:
+#           branch: main
+#           dir_docs: docs
+#           sphinx-apidoc-opts: '--separate -o . ../'
+#           sphinx-apidoc-exclude: '../*setup* ../*.ipynb'
+#           sphinx-opts: ''
+
+jobs:
+  pages:
+    runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Setup Python
-        uses: actions/setup-python@v5.1.0
-        with:
-          python-version: 3.10.12
-      - name: Installing the Documentation requirements
-        run: |
-          pip3 install .[dev]
-      - name: Running the Sphinx to gh-pages Action
-        uses: uibcdf/action-sphinx-docs-to-gh-pages@v2.1.0
-        with:
-          branch: main
-          dir_docs: docs
-          sphinx-apidoc-opts: '--separate -o . ../'
-          sphinx-apidoc-exclude: '../*setup* ../*.ipynb'
-          sphinx-opts: ''
+    - id: deployment
+      uses: sphinx-notes/pages@v3
+      with:
+        publish: false
+    - uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ${{ steps.deployment.outputs.artifact }}
