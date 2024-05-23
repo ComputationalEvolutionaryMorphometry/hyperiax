@@ -165,7 +165,7 @@ class HypTree:
         plot_tree_(tree, ax,inc_names)
 
     def plot_tree_text(self):
-        from .printer_utils import HypTreeFormatter
+        from .plot_utils import HypTreeFormatter
         formatter = HypTreeFormatter(self)
         formatter.print_tree()
 
