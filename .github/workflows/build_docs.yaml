@@ -1,0 +1,30 @@
+name: Deploy Sphinx documentation to Pages
+
+on:
+  push:
+    branches: [main] # branch to trigger deployment
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  
+# allow manually trigger the action
+
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  pages:
+    runs-on: ubuntu-20.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+    - id: deployment
+      uses: sphinx-notes/pages@v3
+      with:
+        documentation_path: ./docs/source
