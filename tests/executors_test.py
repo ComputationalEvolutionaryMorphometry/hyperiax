@@ -8,6 +8,38 @@ from jax.random import PRNGKey
 from jax import numpy as jnp
 import pytest
 
+from hyperiax.tree.fasttree import FastTree, TopologyNode
+from hyperiax.plotting.ascii import plot_tree_text
+from hyperiax.models.lambdamodels import UpLambda
+from hyperiax.execution import FastOrderedExecutor
+
+
+def test_asym():
+    root = TopologyNode()
+    root.children = [TopologyNode(root) for _ in range(4)]
+    root.children[1].children = [TopologyNode(root.children[1]) for _ in range(2)]
+    root.children[3].children = [TopologyNode(root.children[3])]
+    tree = FastTree(root)
+    tree.add_property('count', (1,))
+    tree.data['count'] = jnp.ones_like(tree.data['count'])
+    def _up(count, **kwargs):
+        return {'count': count}
+    def _transform(child_count, count, **kwargs):
+        return {'count': child_count+count}
+    
+    upmodel = UpLambda(_up, _transform, {'count': 'sum'})
+    exe = FastOrderedExecutor(upmodel)
+    res = exe.up(tree)
+
+    assert (res['count'].squeeze() == jnp.array([8,1,3,1,2,1,1,1])).all()
+    assert res['count'][0] == len(tree)
+
+def test_bucket_truncate():
+    a,b = FastTree._truncate_bucket(None, jnp.array([2,2,2,4,4,9,9,10,10]))
+
+    assert (a == jnp.array([2,4,9,10])).all()
+    assert (b == jnp.array([0,0,0,1,1,2,2,3,3])).all()
+
 
 def test_lwte_sum(noise_tree):
     assert len(noise_tree.root.children) == 2

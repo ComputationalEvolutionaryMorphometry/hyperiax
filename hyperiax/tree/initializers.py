@@ -1,8 +1,16 @@
 from . import HypTree
+from .fasttree import FastTree
 from jax.random import PRNGKey, split
 import jax
 import jax.numpy as jnp
 import copy
+
+def initialize_noise_fast(tree : FastTree, key : PRNGKey, shape, name = 'noise') -> HypTree:
+
+    tree.data[name] = jax.random.normal(key, (len(tree), *shape))
+    
+
+    return new_tree
 
 def initialize_noise(tree : HypTree, key : PRNGKey, shape) -> HypTree:
     """Initializes a random value of shape `shape` with key `noise` in each node

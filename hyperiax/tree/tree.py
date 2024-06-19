@@ -60,7 +60,7 @@ class HypTree:
         return f'HypTree with {len(list(self.iter_levels()))} levels and {len(self)} nodes'
 
     def __len__(self) -> int:
-        return len(list(self.iter_bfs()))
+        return sum(1 for _ in self.iter_bfs())
     
     def __getitem__(self, arg):
         for node in self.iter_bfs():
@@ -105,7 +105,7 @@ class HypTree:
         """
         queue = deque([self.root])
 
-        while queue:
+        while queue:    
             current = queue.popleft()
             if current.children:
                 queue.extend(current.children)

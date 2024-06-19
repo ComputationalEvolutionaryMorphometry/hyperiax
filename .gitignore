@@ -173,3 +173,5 @@ changelog
 *_version.py
 examples/example_data
 *test.ipynb
+*.cpp
+.vscode/

@@ -103,8 +103,10 @@ class OrderedExecutor(ABC):
                     fuse_data = dict_collate([child.up_val for child in node.children])
                     fuse_data = {f'child_{k}':v for k,v in fuse_data.items()}
                     fuse_result = self.model.fuse(**node.data, **fuse_data)
+                    print("FUSED", fuse_result)
 
                     node.data = {**node.data, **fuse_result}
+                print("-"*10)
 
                 data = dict_collate([node.data for node in nodes])
 

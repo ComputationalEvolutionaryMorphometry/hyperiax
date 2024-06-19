@@ -1,9 +1,35 @@
 from typing import Type
 
+from .fasttree import TopologyNode
+
 from . import HypTree, TreeNode
 from .childrenlist import ChildList
 
+def symmetric_topology(h : int, degree : int, fake_root : bool = False) -> HypTree:
+    """ Generate tree of given height and degree
 
+    A tree of height zero contains just the root;
+    a tree of height one contains the root and one level of leaves below it,
+    and so forth.
+
+    :param h: The height of the tree
+    :param degree: The degree of each node in the tree
+    :param new_node: The node used to construct the tree, defaults to TreeNode
+    :param fake_root: The fake root node, defaults to None
+    :raises ValueError: If height is negative
+    :return: The constructed tree
+    """
+    if h < 0:
+        raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
+
+    def _builder(h: int, degree: int, parent):
+        node = TopologyNode(); node.parent = parent; node.children = []
+        if h > 1:
+            node.children = [_builder(h - 1, degree, node) for _ in range(degree)]
+        return node
+
+    return _builder(h + 1, degree, None)
+    
 def symmetric_tree(h : int, degree : int, new_node : TreeNode = TreeNode, fake_root : TreeNode = None) -> HypTree:
     """ Generate tree of given height and degree
 
