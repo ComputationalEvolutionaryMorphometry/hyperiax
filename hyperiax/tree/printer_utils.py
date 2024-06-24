@@ -1,9 +1,6 @@
 # Functions for nicer tree printing in the terminal, modified from https://github.com/AharonSambol/PrettyPrintTree
 
 from typing import Any, List, Tuple, Generator
-
-from hyperiax.tree.tree import TreeNode, HypTree
-
 def zip_longest(*iterables: List, default: Any) -> Generator:
     """
     Returns an iterator that aggregates elements from each of the input iterables.

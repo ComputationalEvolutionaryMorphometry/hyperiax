@@ -8,6 +8,7 @@ from typing import Callable
 from functools import partial
 
 def update_noise_inplace(update_f: Callable[[TreeNode,float],float], tree : HypTree, key=False, save_noise=False) -> HypTree:
+    raise DeprecationWarning("This function is deprecated")
     for node in tree.iter_bfs():
         subkey, key = split(key)
         if save_noise:

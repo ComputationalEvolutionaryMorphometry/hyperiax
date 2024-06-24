@@ -1,205 +1,138 @@
 from __future__ import annotations
-
-import copy
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Type, Dict, List, Iterator
-from .childrenlist import ChildList
+from jax import numpy as jnp
+from typing import Iterator, List
+from functools import partial
 
-
-@dataclass(repr=False)
-class TreeNode:
-    """
-    The data nodes within a tree
-
-    """
-    parent : TreeNode = None
-    data : Dict = field(default_factory=dict)
-    children : List[TreeNode] = None
-    name : str = None
-   
-
-    def __repr__(self):
-        return f'TreeNode({self.data}) with {len(self.children)} children' if self.children else f'TreeNode({self.data}) with no children'
+@dataclass
+class TopologyNode:
+    parent : TopologyNode = None
+    children : List[TopologyNode] = field(default_factory=list)
+    _backref : HypTree = None
 
     def __getitem__(self, arg):
-        return self.data.__getitem__(arg)
-
-    def __setitem__(self, key: str, arg):
-        self.data.__setitem__(key, arg)
-
-    def __delitem__(self, key: str):
-        self.data.__delitem__(key)
-
-    def add_child(self, child: Type[TreeNode]) -> Type[TreeNode]:
-        """ 
-        Add an individual child to the node
-
-        :param child: child node to be added
-        :return: the child node
-
-        """
-        child.parent = self
-        self.children._add_child(child)
-        return child
-
-
-
+        if not self._backref:
+            raise ValueError("This node is not part of a tree")
+        return self._backref.data[arg][self.id]
+    
 class HypTree:
-    """
-    The tree class that wraps behavious around a set of nodes.
+    def __init__(self, topology) -> None:
+        self.topology_root = topology
 
-    The set of nodes is given via the `root` node, and can be iterated conveniently using the utility in this class.
-
-    """
-    def __init__(self, root : TreeNode) -> None:
-        self.root = root
-        self.order = None
-        
-    def __repr__(self) -> str:
-        return f'HypTree with {len(list(self.iter_levels()))} levels and {len(self)} nodes'
-
-    def __len__(self) -> int:
-        return sum(1 for _ in self.iter_bfs())
-    
-    def __getitem__(self, arg):
-        for node in self.iter_bfs():
-            yield node.data.__getitem__(arg)
-
-    def __setitem__(self, key, arg):
-        if '__iter__' in getattr(arg, '__dict__', dict()):
-            for node, value in zip(self.iter_bfs(), arg):
-                node.data.__setitem__(key, value)
-        else:
-            for node in self.iter_bfs():
-                node.data.__setitem__(key, arg)
-    
-    def copy(self) -> Type[HypTree]:
-        """
-        Returns a copy of the tree
-
-        :return: a copy of the tree
-
-        """
-        return copy.deepcopy(self)
-
-    def iter_leaves(self) -> Iterator[TreeNode]:
-        """
-        Iterate over all of the leaves in the tree
-
-        """
-
-        queue = deque([self.root])
-
-        while queue:
-            current = queue.popleft()
-            if current.children:
-                queue.extend(current.children)
+        nodes = 0
+        parents = [0]
+        child_counts = []
+        for i,node in enumerate(self.iter_topology_bfs()):
+            nodes += 1
+            node.id = i
+            node._backref = self
+            if node.parent: 
+                parents.append(node.parent.id)
+            if node.children:
+                child_counts.append(len(node.children))
             else:
-                yield current
+                child_counts.append(0)
+            #child_counts.append(len(node.children)) 
 
-    def iter_bfs(self) -> Iterator[TreeNode]:
-        """
-        Iterate over all of the nodes in a breadth first manner
+        
+        
 
-        """
-        queue = deque([self.root])
+        self.size = nodes
+        self.data = {}
+        self.masks = {}
 
-        while queue:    
-            current = queue.popleft()
-            if current.children:
-                queue.extend(current.children)
-            yield current
 
-    def iter_dfs(self) -> Iterator[TreeNode]:
-        """
-        Iterate over all of the nodes in a depth-first manner.
+        # TODO: SPEED ALL OF THIS UP
+        self.levels = list(self._calculate_levels())
+        self.node_depths = jnp.concatenate([i*jnp.ones((lend-lstart, 1), dtype=int) for i,(lstart,lend) in enumerate(self.levels)])
+        #self.psizes = [end-start for start,end in self.levels]
+        self.parents = jnp.array(parents)
+        self.child_counts = jnp.array(child_counts)
+        self.node_is_leaf = ~self.child_counts.astype(bool)
+        pbuckets = jnp.copy(self.parents)
+        pbuckets_ref = []
+        for lmin,lmax in self.levels:
+            pvals = pbuckets[lmin:lmax]
+            pbuckets_refi, pbucket = self._truncate_bucket(pvals)
+            pbuckets = pbuckets.at[lmin:lmax].set(pbucket)
+            pbuckets_ref.append(pbuckets_refi)
+        self.pbuckets = pbuckets
+        self.pbuckets_ref = pbuckets_ref
 
-        """
-        stack = deque([self.root])
+        #self.child_counts = jnp.array(child_counts)
+        self.depth = len(self.levels)-1
+        self.leaves = self.levels[-1]
 
-        while stack:
-            current = stack.pop()
-            if current.children:
-                stack.extend(current.children)
-            yield current
+    def _truncate_bucket(self, bucket):
+        vals = [bucket[0]]
+        outbuck = [0]
+        cur = bucket[0]
+        skipped = bucket[0]
+        for el in bucket[1:]:
+            if el > cur: 
+                skipped += el-cur-1
+                cur = el
+                vals.append(el)
+            outbuck.append(el-skipped)
+        return jnp.array(vals), jnp.array(outbuck)
 
-    def iter_levels(self) -> Iterator[List[TreeNode]]:
-        """
-        Iterate over each level in the tree
-
-        """
+    def _calculate_levels(self):
         queue = deque()
-        buffer_queue = deque([self.root])
+        buffer_queue = deque([self.topology_root])
         while queue or buffer_queue:
             if not queue: # if queue is empty, flush the buffer and yield a level
                 queue = buffer_queue
-                yield list(buffer_queue) # to not pass the reference
+                yield (buffer_queue[0].id, buffer_queue[-1].id+1) # to not pass the reference
                 buffer_queue = deque()
 
             if children := queue.popleft().children:
                 buffer_queue.extend(children)
 
-    def iter_leaves_dfs(self) -> Iterator[TreeNode]:
-        """
-        Iterates over the leaves in the tree using depth-first search.
 
-        ??? Duplicate of iter_leaves
-        """
-        stack = deque([self.root])
+    def __len__(self) -> int:
+        return self.size
 
-        while stack:
-            current = stack.pop()
+    def add_property(self, name, shape, initializer = None, key = None):
+        self.data[name] = jnp.empty((self.size, *shape))
+        self.masks[name] = jnp.zeros((self.size,), dtype=bool)
+
+    def iter_topology_bfs(self) -> Iterator[TopologyNode]:
+        """
+        Iterate over all of the nodes in a breadth first manner
+
+        """
+        queue = deque([self.topology_root])
+
+        while queue:
+            current = queue.popleft()
             if current.children:
-                stack.extend(reversed(current.children))
-            else:
-                yield current
+                queue.extend(current.children)
+            yield current
 
-    def plot_tree_2d(self, ax=None, selector=None):
-        from .plot_utils import plot_tree_2d_
-        plot_tree_2d_(self, ax, selector)
 
-    def plot_tree(self, ax=None,inc_names=False):
-        tree = self.copy()
-        from .plot_utils import plot_tree_
-        plot_tree_(tree, ax,inc_names)
+class FastBiTree(HypTree):
+    """
+        Mostly for simulation purposes, creates a bifurcating tree
+        without the topology, making instantiation fast
+    """
+    def __init__(self, depth) -> None:
+        self.size = (2<<depth)-1
+        self.data = {}
+        self.masks = {}
 
-    def plot_tree_text(self):
-        from .printer_utils import HypTreeFormatter
-        formatter = HypTreeFormatter(self)
-        formatter.print_tree()
+        self.levels = [(0,1)]+[((2<<i)-1, (2<<(i+1))-1) for i in range(depth)]
+        self.parents = jnp.concatenate([jnp.array([0]),jnp.arange(self.size-1)//2])
+        self.depth = len(self.levels)-1
+        self.leaves = self.levels[-1]
 
-    def to_newick(self):
-        # Recursive function to convert tree to Newick string
-        def to_newick(node:TreeNode):
-            """Recursively generates a Newick string from a JaxNode tree."""
-            if node is None:
-                return ''
-            
-            parts = []
-            if node.children is not None:
-                for child in node.children:
-
-                    part = to_newick(child)
-                    parts.append(part)
-                
-            # If the current node has children, enclose the children's string representation in parentheses
-            if parts:
-                children_str = '(' + ','.join(parts) + ')'
-            else:
-                children_str = ''
-
-            # Node name and distance formatting
-            node_info = node.name if node.name else ''
-            if 'edge_length' in node.data:
-                node_info += ':' + str(node.data['edge_length'])
-
-            # For nodes that have both children and their own information (name or distance)
-            if children_str or node_info:
-                return children_str + node_info
-            else:
-                # For the very rare case where a node might not have a name or children (unlikely in valid Newick)
-                return ''
-
-        """Converts a JaxTree to a Newick string."""
-        return  to_newick(self.root) + ';'
+## would love to get this work but https://github.com/google/jax/issues/4269 makes 
+## me believe this is probably a non JAX approach
+class TreeField:
+    def __init__(self, size, shape) -> None:
+        raise NotImplementedError()
+        self.shape = shape
+        self.mask = jnp.zeros((size,), dtype=bool)
+        self.data = jnp.empty((size, *shape))
+    def __repr__(self) -> str:
+        return str(self.data)

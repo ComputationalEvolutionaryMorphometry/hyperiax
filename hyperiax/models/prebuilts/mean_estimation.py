@@ -9,28 +9,12 @@ class PhyloMeanModel(UpModel):
 
     Assumes leaves all contain `estimated_value` before running it. This corresponds to actual observations.
     """
-    def __init__(self,param_config = {}, **kwargs) -> None:
-        super().__init__()
+    def __init__(self, **kwargs) -> None:
+        super().__init__(reductions={'weighted_value': 'sum', 'inverse_edge_length': 'sum'}, **kwargs)
 
-    @partial(jax.jit, static_argnums=0)
-    def up(self, estimated_value, edge_length,**kwargs):
-        """inputs functions to fuse 
+    def up(self, estimated_value, edge_length, **kwargs):
+        return {'weighted_value': estimated_value/edge_length, 'inverse_edge_length':1/edge_length}
 
-        :param estimated_value: value from node
-        :param edge_length: value from node 
-        :return: outputs same the estimated parameters to parent (from fuse) 
-        """
-        return {'estimated_value': estimated_value, 'edge_length': edge_length}
 
-    def fuse(self, child_estimated_value, child_edge_length, **kwargs):
-        """fuse 
-
-        :param child_estimated_value: value from child node
-        :param child_edge_length: value from child node
-        :return: phylogenetic mean of the children returned to parent 
-        """
-
-        childrent_inv = 1 / child_edge_length
-
-        result = jnp.einsum('c1,cd->d',childrent_inv, child_estimated_value)/childrent_inv.sum()
-        return {'estimated_value': result}
+    def transform(self, child_weighted_value,child_inverse_edge_length, **kwargs):
+        return {'estimated_value': child_weighted_value/child_inverse_edge_length}

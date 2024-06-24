@@ -1,3 +1,5 @@
+from ..tree import HypTree, TopologyNode
+
 def plot_tree_text(tree):
     formatter = TreeFormatter(tree)
     formatter.print_tree()
@@ -6,8 +8,6 @@ def plot_tree_text(tree):
 # Functions for nicer tree printing in the terminal, modified from https://github.com/AharonSambol/PrettyPrintTree
 
 from typing import Any, List, Tuple, Generator
-
-from hyperiax.tree.tree import TreeNode, HypTree
 
 def zip_longest(*iterables: List, default: Any) -> Generator:
     """
@@ -202,13 +202,18 @@ class TreeFormatter:
             Prints the formatted tree representation to the console.
     """
 
-    def __init__(self, tree: HypTree) -> None:
-        self.root = tree.topology_root
+    def __init__(self, tree) -> None:
+        if issubclass(type(tree), HypTree):
+            self.root = tree.topology_root
+        elif issubclass(type(tree), TopologyNode):
+            self.root = tree
+        else:
+            raise ValueError('Tree must be of type HypTree or TopologyNode')
 
-    def get_children(self, node: TreeNode) -> List[TreeNode]:
+    def get_children(self, node: TopologyNode) -> List[TopologyNode]:
         return node.children
     
-    def get_name(self, node: TreeNode) -> str:
+    def get_name(self, node: TopologyNode) -> str:
         return node.name if 'name' in node.__dict__ else '*'
     
     # def add_name(self, name: str, node_formatter: TreeNodeFormatter, parent_adder: callable=add_parent, seperator: str = ' ') -> TreeNodeFormatter:
@@ -229,7 +234,7 @@ class TreeFormatter:
         res = res.to_string().rstrip()
         return res
     
-    def tree_join_formatter(self, node: TreeNode, depth: int = 0) -> TreeNodeFormatter:
+    def tree_join_formatter(self, node: TopologyNode, depth: int = 0) -> TreeNodeFormatter:
         """
         Recursively formats the tree structure and returns the root node formatter.
 
@@ -261,7 +266,7 @@ class TreeFormatter:
             
         return node_formatter
     
-    def node_to_formatter(self, node: TreeNode) -> TreeNodeFormatter:
+    def node_to_formatter(self, node: TopologyNode) -> TreeNodeFormatter:
         """
         Converts a node into a TreeNodeFormatter object and returns it.
 

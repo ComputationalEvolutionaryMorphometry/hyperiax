@@ -1,9 +1,8 @@
 import hyperiax
 from jax.random import PRNGKey, split
 from hyperiax.execution import LevelwiseTreeExecutor
-from hyperiax.tree.fasttree import FastTree
+from hyperiax.tree.fasttree import HypTree
 import jax
-from hyperiax.execution.collate import dict_collate
 from hyperiax.tree.builders import symmetric_topology
 import time
 from matplotlib import pyplot as plt
@@ -17,7 +16,7 @@ oldt = []
 for depth in tqdm(depths):
 
     topology = symmetric_topology(depth, 2)
-    fast_tree = FastTree(topology)
+    fast_tree = HypTree(topology)
     #print(f"Fast tree with {len(fast_tree)} nodes")
 
     fast_tree.add_property('noise', (10,2))
@@ -43,10 +42,6 @@ for depth in tqdm(depths):
     order = reversed(noise_tree.order[0])
 
     start = time.time()
-    for level in order:
-        # start by fusing children  
-        for nodes in lwe._batch_aggregate(level):
-            data = dict_collate([node.data for node in nodes])
             
 
     end = time.time()

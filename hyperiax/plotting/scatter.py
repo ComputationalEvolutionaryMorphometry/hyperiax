@@ -1,6 +1,6 @@
-from ..tree.fasttree import FastTree
+from ..tree import HypTree
 
-def plot_tree_2d_scatter(tree : FastTree, property : str, ax=None):
+def plot_tree_2d_scatter(tree : HypTree, property : str, ax=None):
     from matplotlib import pyplot as plt
     from matplotlib import patches as mpatch
 
