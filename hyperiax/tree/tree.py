@@ -70,7 +70,6 @@ class HypTree:
             self.coloring = self.coloring.at[lmin:lmax].set(True)
 
         if precompute_child_gathers:
-            starttime = time.time()
             uniq = jnp.unique(self.child_counts, )
             if len(uniq) == 2:
                 null, base = uniq
@@ -82,10 +81,6 @@ class HypTree:
                     if not node.children: children.append(int(base)*[0])
                     else: children.append([c.id for c in node.children])
                 self.gather_child_idx = jnp.array(children) 
-
-
-            endtime = time.time()
-            print(f"Precomputed child gathers in {endtime-starttime} seconds")
             # 2 unique values implies that the tree has a "nice" structure
 
 
