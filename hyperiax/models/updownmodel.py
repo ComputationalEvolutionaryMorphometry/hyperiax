@@ -1,13 +1,11 @@
-from .basemodel import BaseModel
+from .basemodel import BaseModel, ReducerModel
 from abc import abstractmethod
-from .utils import map_reduction
 from inspect import getfullargspec
+from .utils import filter_keywords
 
-class UpModel(BaseModel):
+class UpReducer(ReducerModel):
     def __init__(self, reductions) -> None:
-        #self.produces = produces
-        self.reductions = {k: map_reduction(v) for k,v in reductions.items()}
-        self._set_up_keys()
+        super().__init__(reductions=reductions)
 
     @abstractmethod
     def transform(self, **kwargs): ...
@@ -15,33 +13,35 @@ class UpModel(BaseModel):
     @abstractmethod
     def up(self, **kwargs): ...
 
-    def _set_up_keys(self):
+    def _set_keys(self):
         up_arg_spec = getfullargspec(self.up)
-        upkeys = up_arg_spec.args
+        upkeys = filter_keywords(up_arg_spec.args)
         self.up_keys = [k for k in upkeys if k != 'self']
+        self.up_keys
 
         transform_arg_spec = getfullargspec(self.transform)
-        keys = transform_arg_spec.args
+        keys = filter_keywords(transform_arg_spec.args)
+
         transform_child_keys = [k.removeprefix('child_') for k in keys if k.startswith('child_')]
-        transform_parent_keys = [k for k in keys if not k.startswith('child_') and k != 'self']
+        transform_parent_keys = [k for k in keys if not k.startswith('child_')]
 
         self.transform_child_keys = transform_child_keys
         self.transform_parent_keys = transform_parent_keys
 
 class DownModel(BaseModel):
     def __init__(self) -> None:
-        self._set_down_keys()
+        super().__init__()
 
     @abstractmethod
     def down(self, **kwargs): ...
 
-    def _set_down_keys(self):
+    def _set_keys(self):
         arg_spec = getfullargspec(self.down)
 
-        keys = arg_spec.args # TODO: we should remove things like key, up_msg, params
+        keys = filter_keywords(arg_spec.args)
 
         down_parent_keys = [k.removeprefix('parent_') for k in keys if k.startswith('parent_')]
-        down_child_keys = [k for k in keys if not k.startswith('parent_') and k != 'self']
+        down_child_keys = [k for k in keys if not k.startswith('parent_')]
 
         self.down_parent_keys = down_parent_keys
         self.down_child_keys = down_child_keys

@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from jax import numpy as jnp
 from typing import Iterator, List
 from functools import partial
+import time
+import jax
 
 @dataclass
 class TopologyNode:
@@ -17,22 +19,17 @@ class TopologyNode:
         return self._backref.data[arg][self.id]
     
 class HypTree:
-    def __init__(self, topology) -> None:
+    def __init__(self, topology, precompute_child_gathers = False) -> None:
         self.topology_root = topology
 
         nodes = 0
         parents = [0]
-        child_counts = []
         for i,node in enumerate(self.iter_topology_bfs()):
             nodes += 1
             node.id = i
             node._backref = self
             if node.parent: 
                 parents.append(node.parent.id)
-            if node.children:
-                child_counts.append(len(node.children))
-            else:
-                child_counts.append(0)
             #child_counts.append(len(node.children)) 
 
         
@@ -43,18 +40,22 @@ class HypTree:
         self.masks = {}
 
 
-        # TODO: SPEED ALL OF THIS UP
         self.levels = list(self._calculate_levels())
         self.node_depths = jnp.concatenate([i*jnp.ones((lend-lstart, 1), dtype=int) for i,(lstart,lend) in enumerate(self.levels)])
-        #self.psizes = [end-start for start,end in self.levels]
+
         self.parents = jnp.array(parents)
-        self.child_counts = jnp.array(child_counts)
-        self.node_is_leaf = ~self.child_counts.astype(bool)
+        self.child_counts = jax.ops.segment_sum(jnp.ones((self.size,), dtype=int), self.parents, num_segments=self.size, indices_are_sorted=True)
+        self.child_counts = self.child_counts.at[0].add(-1)
+        self.is_leaf = ~self.child_counts.astype(bool)
+        self.is_root = jnp.zeros((self.size,), dtype=bool)
+        self.is_root = self.is_root.at[0].set(True)
+        self.is_inner = ~self.is_leaf & ~self.is_root
+
         pbuckets = jnp.copy(self.parents)
         pbuckets_ref = []
         for lmin,lmax in self.levels:
             pvals = pbuckets[lmin:lmax]
-            pbuckets_refi, pbucket = self._truncate_bucket(pvals)
+            pbuckets_refi, pbucket = jnp.unique(pvals, return_inverse=True)
             pbuckets = pbuckets.at[lmin:lmax].set(pbucket)
             pbuckets_ref.append(pbuckets_refi)
         self.pbuckets = pbuckets
@@ -62,20 +63,32 @@ class HypTree:
 
         #self.child_counts = jnp.array(child_counts)
         self.depth = len(self.levels)-1
-        self.leaves = self.levels[-1]
+        self.leaf_limits = self.levels[-1]
 
-    def _truncate_bucket(self, bucket):
-        vals = [bucket[0]]
-        outbuck = [0]
-        cur = bucket[0]
-        skipped = bucket[0]
-        for el in bucket[1:]:
-            if el > cur: 
-                skipped += el-cur-1
-                cur = el
-                vals.append(el)
-            outbuck.append(el-skipped)
-        return jnp.array(vals), jnp.array(outbuck)
+        self.coloring = jnp.zeros_like(self.parents, dtype=bool)
+        for lmin, lmax in self.levels[::2]:
+            self.coloring = self.coloring.at[lmin:lmax].set(True)
+
+        if precompute_child_gathers:
+            starttime = time.time()
+            uniq = jnp.unique(self.child_counts, )
+            if len(uniq) == 2:
+                null, base = uniq
+                assert null == 0
+                self.base = base
+                #self.gather_child_idx = jnp.zeros((self.size, self.base), dtype=int)
+                children = []
+                for i,node in enumerate(self.iter_topology_bfs()):
+                    if not node.children: children.append(int(base)*[0])
+                    else: children.append([c.id for c in node.children])
+                self.gather_child_idx = jnp.array(children) 
+
+
+            endtime = time.time()
+            print(f"Precomputed child gathers in {endtime-starttime} seconds")
+            # 2 unique values implies that the tree has a "nice" structure
+
+
 
     def _calculate_levels(self):
         queue = deque()

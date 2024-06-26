@@ -1,10 +1,10 @@
-from ..updownmodel import UpModel
+from ..updownmodel import UpReducer
 import jax
 from jax import numpy as jnp
 from functools import partial
 from ..functional import pass_up
 
-class PhyloMeanModel(UpModel):
+class PhyloMeanModel(UpReducer):
     """Prebuilt model that calculates phylogenetic means in each node
 
     Assumes leaves all contain `estimated_value` before running it. This corresponds to actual observations.

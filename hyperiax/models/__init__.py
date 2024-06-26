@@ -1,4 +1,4 @@
-from .updownmodel import UpModel,DownModel,FuseModel
-from .lambdamodels import UpLambda, DownLambda, FuseLambda, UpdateLambda
-from .updatemodel import UpdateModel
+from .updownmodel import UpReducer,DownModel,FuseModel
+from .lambdamodels import UpLambdaReducer, DownLambda, FuseLambda, UpdateLambda
+from .updatemodel import UpdateReducer, UpdateModel
 from . import functional    

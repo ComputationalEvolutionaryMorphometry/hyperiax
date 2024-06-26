@@ -1,7 +1,7 @@
-from .updownmodel import UpModel, DownModel, FuseModel
-from .updatemodel import UpdateModel
+from .updownmodel import UpReducer, DownModel, FuseModel
+from .updatemodel import UpdateReducer, UpdateModel
 
-class UpLambda(UpModel):
+class UpLambdaReducer(UpReducer):
     """ Lambda model that only contains an up interface
 
     :param UpModel: Requires an up and fuse function.
@@ -51,7 +51,7 @@ class DownLambda(DownModel):
         """
         raise ValueError('Model does not have a valid down function')
     
-class UpdateLambda(UpdateModel):
+class UpdateLambdaReducer(UpdateReducer):
     """Lambda model that only contains a local update interface
 
     :param UpdateModel: Requires an update function.
@@ -73,6 +73,29 @@ class UpdateLambda(UpdateModel):
         """
         raise ValueError('Model does not have a valid up function')
     
+    def update(self, *args, **kwargs):
+        """ Fuse function to define calculations from up parameters
+        :return: calculated values from up parameters to parent node
+        """
+        raise ValueError('Model does not have a valid fuse function')
+    
+
+class UpdateLambda(UpdateModel):
+    """Lambda model that only contains a local update interface
+
+    :param UpdateModel: Requires an update function.
+    """
+    def __init__(self, update_fn) -> None:
+        """Lambda model that only contains an up interface
+
+        :param up_fn: param intputs from node to update_fn
+        :param update_fn: function to update or do calculations form up parameters
+        """
+        self.update = update_fn
+
+        super().__init__()
+    
+
     def update(self, *args, **kwargs):
         """ Fuse function to define calculations from up parameters
         :return: calculated values from up parameters to parent node

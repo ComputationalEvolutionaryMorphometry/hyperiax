@@ -2,7 +2,7 @@ from __future__ import annotations
 from abc import ABC
 from ..tree import HypTree
 import jax
-from ..models import UpModel, DownModel, FuseModel
+from ..models import UpReducer, DownModel, FuseModel
 from inspect import getfullargspec
 from functools import partial
 
@@ -15,21 +15,21 @@ class OrderedExecutor(ABC):
     are to be executed in the tree. It is assumed that all operations are batched.
     """
     def __init__(self, 
-                 model : UpModel | DownModel,
+                 model : UpReducer | DownModel,
                  key = None) -> None:
         self.key = key if key else jax.random.PRNGKey(0)
         self.model = model
 
     def up(self, tree : HypTree, params = {}):
-        if not issubclass(type(self.model), UpModel):
-            raise ValueError('Model needs to be of type UpModel')
+        if not issubclass(type(self.model), UpReducer):
+            raise ValueError('Model needs to be of type UpReducer')
         # out here we fetch the data stored in the tree
 
         #for k,val_shape in self.model.up_produces.items():
         #    if k not in tree.data:
         #        tree.add_property(k, val_shape)
 
-        if issubclass(type(self.model), UpModel):
+        if issubclass(type(self.model), UpReducer):
             new_data = self._up_inner(tree.data, tree, params)
 
             tree.data = {**tree.data, **new_data}

@@ -1,44 +1,58 @@
-
-from ..models import UpdateModel
+from ..models import UpdateReducer, UpdateModel
 import jax
 from inspect import getfullargspec
 from functools import partial
+from jax import numpy as jnp
 
 class UnorderedExecutor:
     "Executes nodes in an unstructured way; giving full context from both parents and children"
 
-    def __init__(self, model : UpdateModel, key = None) -> None:
+    def __init__(self, model, key = None) -> None:
         self.model = model
 
         self.key = key if key else jax.random.PRNGKey(0)
         self.model = model
 
-        self._set_update_keys()
-
-    def _set_update_keys(self):
-        up_arg_spec = getfullargspec(self.model.up)
-        upkeys = up_arg_spec.args
-        self.up_keys = upkeys
-
-        update_arg_spec = getfullargspec(self.model.update)
-        keys = update_arg_spec.args
-        update_parent_keys = [k.removeprefix('parent_') for k in keys if k.startswith('parent_')]
-        update_node_keys = [k for k in keys if not k.startswith('parent_') and not k.startswith('child_')]
-
-        self.update_parent_keys = update_parent_keys
-        self.update_node_keys = update_node_keys
-
     def update(self, tree, params = {}):
-        if not issubclass(type(self.model), (UpdateModel,)):
-            raise ValueError('Model needs to be of type UpdateModel')
-        new_data = self._update_inner(tree.data, tree, params)
-
+        if issubclass(type(self.model), UpdateReducer):
+            new_data = self._update_reduce_inner(tree.data, tree, params)
+        elif issubclass(type(self.model), UpdateModel):
+            coloring = tree.coloring
+            red_indx = jnp.arange(tree.size)[coloring]
+            new_data = self._update_inner(tree.data, tree, red_indx, params)
+            black_indx = jnp.arange(tree.size)[~coloring]
+            new_data = self._update_inner(new_data, tree, black_indx, params)
+        else:
+            raise ValueError('Model needs to be of type UpdateReducer or UpdateModel')
         tree.data = {**tree.data, **new_data}
 
-        return new_data
-    
     @partial(jax.jit, static_argnames=['tree', 'self']) 
-    def _update_inner(self, data, tree, params):
+    def _update_inner(self, data, tree, coloring, params):
+        node_data = {
+            k: data[k][coloring]
+            for k in self.model.update_current_keys
+        }
+        parent_data = {
+            f'parent_{k}': data[k][tree.parents[coloring]]
+            for k in self.model.update_parent_keys
+        }
+        child_data = {
+            f'child_{k}': data[k][tree.gather_child_idx[coloring]]
+            for k in self.model.update_child_keys
+        }
+
+        result = self.model.update(**parent_data, **node_data, **child_data, 
+                        root_mask=tree.is_root[coloring], 
+                        leaf_mask=tree.is_leaf[coloring], params = params)
+
+        for k, val in result.items():
+            data[k] = data[k].at[coloring].set(val)
+
+        return data
+
+
+    @partial(jax.jit, static_argnames=['tree', 'self']) 
+    def _update_reduce_inner(self, data, tree, params):
         iterator = zip(
             reversed(tree.levels[1:]), # indices for levels
             reversed(tree.pbuckets_ref) # indices for upwards propagation

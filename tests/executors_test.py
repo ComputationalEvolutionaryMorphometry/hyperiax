@@ -1,17 +1,11 @@
-from hyperiax.execution import LevelwiseTreeExecutor, DependencyTreeExecutor
-from hyperiax.models import UpDownLambda
-from test_fixtures import small_tree, phony_executor,noise_tree
-from hyperiax.models.functional import pass_up, sum_fuse_children
-from hyperiax.tree import TreeNode, HypTree
-import hyperiax
-from jax.random import PRNGKey
-from jax import numpy as jnp
-import pytest
 
-from hyperiax.tree.fasttree import HypTree, TopologyNode
-from hyperiax.plotting.ascii import plot_tree_text
-from hyperiax.models.lambdamodels import UpLambda
-from hyperiax.execution import FastOrderedExecutor
+from hyperiax.models.functional import pass_up, sum_fuse_children
+from hyperiax.tree import TopologyNode, HypTree
+from jax import numpy as jnp
+
+from hyperiax.models.lambdamodels import UpLambdaReducer
+from hyperiax.execution import OrderedExecutor
+from hyperiax.plotting import plot_tree_text
 
 
 def test_asym():
@@ -21,25 +15,23 @@ def test_asym():
     root.children[3].children = [TopologyNode(root.children[3])]
     tree = HypTree(root)
     tree.add_property('count', (1,))
+    tree.add_property('sum_count', (1,))
     tree.data['count'] = jnp.ones_like(tree.data['count'])
-    def _up(count, **kwargs):
-        return {'count': count}
-    def _transform(child_count, count, **kwargs):
-        return {'count': child_count+count}
+    tree.data['sum_count'] = tree.data['sum_count'].at[tree.is_leaf].set(tree.data['count'][tree.is_leaf])
+    def _up(sum_count, **kwargs):
+        return {'sub_count': sum_count}
+    def _transform(child_sub_count, count, **kwargs):
+        return {'sum_count': child_sub_count+count}
     
-    upmodel = UpLambda(_up, _transform, {'count': 'sum'})
-    exe = FastOrderedExecutor(upmodel)
-    res = exe.up(tree)
+    print()
+    plot_tree_text(tree)
+    
+    upmodel = UpLambdaReducer(_up, _transform, {'sub_count': 'sum'})
+    exe = OrderedExecutor(upmodel)
+    exe.up(tree)
 
-    assert (res['count'].squeeze() == jnp.array([8,1,3,1,2,1,1,1])).all()
-    assert res['count'][0] == len(tree)
-
-def test_bucket_truncate():
-    a,b = HypTree._truncate_bucket(None, jnp.array([2,2,2,4,4,9,9,10,10]))
-
-    assert (a == jnp.array([2,4,9,10])).all()
-    assert (b == jnp.array([0,0,0,1,1,2,2,3,3])).all()
-
+    assert (tree.data['sum_count'].squeeze() == jnp.array([8,1,3,1,2,1,1,1])).all()
+    assert tree.data['sum_count'][0] == len(tree)
 
 def test_lwte_sum(noise_tree):
     assert len(noise_tree.root.children) == 2
@@ -58,6 +50,8 @@ def test_lwte_sum(noise_tree):
 
     down_result = exe.down(tree_result)
     assert (next(down_result.iter_leaves())['noise'] == manual_sum/2).all()
+
+    #print
 
 
 def test_lwte_levels_odd_tree(phony_executor):

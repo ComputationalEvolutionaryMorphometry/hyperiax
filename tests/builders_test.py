@@ -1,5 +1,3 @@
-from hyperiax.tree.builders import symmetric_tree
-from hyperiax.tree.initializers import initialize_noise_inplace
 from jax.random import PRNGKey
 
 def test_symmetric_tree():

@@ -2,10 +2,7 @@ from jax import numpy as jnp
 from jax.random import PRNGKey
 from pytest import fixture
 
-from hyperiax.execution import LevelwiseTreeExecutor
-from hyperiax.models import UpDownLambda
-from hyperiax.tree.builders import symmetric_tree
-from hyperiax.tree.initializers import initialize_noise_leaves
+
 
 
 @fixture
