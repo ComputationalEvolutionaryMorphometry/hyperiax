@@ -20,7 +20,7 @@ class UpLambdaReducer(UpReducer):
 
     def up(self, *args, **kwargs):
         """ Up function to define values to fuse function
-        :return: input arguments to fuse function
+        :return: input arguments to fuse functionUpLambdaReducer
         """
         raise ValueError('Model does not have a valid up function')
     
