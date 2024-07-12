@@ -25,3 +25,35 @@ def symmetric_topology(height : int, degree : int, fake_root : bool = False) -> 
         return node
 
     return _builder(height + 1, degree, None)
+
+
+
+def asymmetric_topology(h: int)  -> TopologyNode:
+    """ 
+    Generate an asymmetric binary tree of given height.
+    A tree of height zero contains just the root;
+    a tree of height one contains the root and one level of leaves below it, and so forth.
+
+    :param h: The height of the tree
+    :raises ValueError: If height is negative
+    :return: The constructed tree
+    """
+    if h < 0:
+        raise ValueError(f'Height shall be nonnegative integer, received {h=}.')
+    elif h == 0:
+        return ChildList([TreeNode()])
+
+    # Fake root 
+    root = TopologyNode(); root.parent = None; root.children = []
+    root.children = [TopologyNode(children= [],parent=root), TopologyNode(children=[],parent=root)]
+   
+    node = root.children[0]
+
+    for _ in range(h - 1):
+        node.children=  [TopologyNode(children=[],parent=node), TopologyNode(children=[],parent=node)]
+
+        node = node.children[0]
+
+    return root 
+
+
