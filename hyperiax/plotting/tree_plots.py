@@ -1,5 +1,4 @@
 from ..tree import HypTree
-
 from jax import numpy as jnp
 import copy
 
@@ -20,8 +19,9 @@ def estimate_position(self):
         self.data['x_temp'] = self.data['x_temp'].at[leaf.id].set(0)
 
         if leaf.parent is not None: # Skip.topology_root
-            if 'edge_length' in self.data.keys():
-                new_value = self.data['y_temp'][leaf.parent.id]-self.data['edge_length'][leaf.id]
+            if hasattr(leaf, 'data') and 'edge_length' in leaf.data.keys():
+           # if 'edge_length' in leaf.data.keys():
+                new_value = self.data['y_temp'][leaf.parent.id]-leaf.data['edge_length']
                 self.data['y_temp'] = self.data['y_temp'].at[leaf.id].set(new_value)
 
             else: 
@@ -61,6 +61,7 @@ def plot_tree(self_input,ax=None,inc_names=False):
  
     if ax == None:
         fig,ax = plt.subplots(figsize=(10,8))
+
 
     estimate_position(self)
 
