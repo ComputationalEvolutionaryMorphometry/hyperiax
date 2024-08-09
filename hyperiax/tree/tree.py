@@ -119,6 +119,15 @@ class HypTree:
             if current.children:
                 queue.extend(current.children)
             yield current
+    
+    def __repr__(self):
+        """
+        Return a string representation of the tree
+        """
+        return f"HypTree(size={self.size}, levels={len(self.levels)}, leaves={jnp.sum(self.is_leaf)}, inner nodes={jnp.sum(self.is_inner)})"
+
+    def __str__(self):
+        return self.__repr__()
 
 
 class FastBiTree(HypTree):

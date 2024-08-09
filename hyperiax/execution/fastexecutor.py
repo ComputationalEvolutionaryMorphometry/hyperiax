@@ -105,7 +105,7 @@ class OrderedExecutor(ABC):
 
 
     @partial(jax.jit, static_argnames=['tree', 'self']) 
-    def _down_inner(self, data, tree): #inner jitted runner for MAXIMUM PERFORMANCE
+    def _down_inner(self, data, tree, params): #inner jitted runner for MAXIMUM PERFORMANCE
         #print(data, tree.levels)
         for level_start, level_end in tree.levels[1:]:
             node_data = {
@@ -118,7 +118,10 @@ class OrderedExecutor(ABC):
                 for k in self.model.down_parent_keys
             }
 
-            result = self.model.down(**node_data, **parent_data)
+            if params:
+                result = self.model.down(**node_data, **parent_data, params=params)
+            else:
+                result = self.model.down(**node_data, **parent_data)
 
             for k, val in result.items():
                 data[k] = data[k].at[level_start:level_end].set(val)
@@ -152,7 +155,7 @@ class OrderedExecutor(ABC):
             raise ValueError('Model needs to be of type DownModel')
         # out here we fetch the data stored in the tree
 
-        new_data = self._down_inner(tree.data, tree)
+        new_data = self._down_inner(tree.data, tree, params = params)
 
         tree.data = {**tree.data, **new_data}
 
