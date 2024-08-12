@@ -12,7 +12,7 @@ class TopologyNode:
     parent : TopologyNode = None
     children : List[TopologyNode] = field(default_factory=list)
     _backref : HypTree = None
-
+    name : str = None
     def __getitem__(self, arg):
         if not self._backref:
             raise ValueError("This node is not part of a tree")
@@ -34,7 +34,7 @@ class HypTree:
 
         
         
-
+        
         self.size = nodes
         self.data = {}
         self.masks = {}
@@ -128,6 +128,65 @@ class HypTree:
 
     def __str__(self):
         return self.__repr__()
+
+    # Extra transversel methods for the tree
+    def iter_topology_dfs(self) -> Iterator[TopologyNode]:
+        """
+        Iterate over all of the nodes in a depth-first manner.
+
+        """
+        stack = deque([self.topology_root])
+
+        while stack:
+            current = stack.pop()
+            if current.children:
+                stack.extend(current.children)
+            yield current
+    
+    def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
+        """
+        Iterate over all of the leaves in the tree, in a depth-first manner.
+
+        """
+
+        queue = deque([self.topology_root])
+
+        while queue:
+            current = queue.popleft()
+            if current.children:
+                queue.extend(current.children)
+            else:
+                yield current
+    
+    def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
+        """
+        Iterates over the leaves in the tree using depth-first search.
+        Note that this is not the same as iter_topology_leaves_dfs, as this method is bfs 
+        """
+        stack = deque([self.topology_root])
+
+        while stack:
+            current = stack.pop()
+            if current.children:
+                stack.extend(reversed(current.children))
+            else:
+                yield current
+
+    def iter_topology_levels(self) -> Iterator[List[TopologyNode]]:
+        """
+        Iterate over each level in the tree
+
+        """
+        queue = deque()
+        buffer_queue = deque([self.topology_root])
+        while queue or buffer_queue:
+            if not queue: # if queue is empty, flush the buffer and yield a level
+                queue = buffer_queue
+                yield list(buffer_queue) # to not pass the reference
+                buffer_queue = deque()
+
+            if children := queue.popleft().children:
+                buffer_queue.extend(children)   
 
 
 class FastBiTree(HypTree):
