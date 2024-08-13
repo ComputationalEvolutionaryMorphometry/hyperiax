@@ -2,7 +2,7 @@ from __future__ import annotations
 from abc import ABC
 from ..tree import HypTree
 import jax
-from ..models import UpReducer, DownModel, FuseModel
+from ..models import UpReducer, DownModel, UpModel
 from inspect import getfullargspec
 from functools import partial
 
@@ -21,8 +21,8 @@ class OrderedExecutor(ABC):
         self.model = model
 
     def up(self, tree : HypTree, params = {}):
-        if not issubclass(type(self.model), UpReducer):
-            raise ValueError('Model needs to be of type UpReducer')
+        if not issubclass(type(self.model), (UpReducer, UpModel)):
+            raise ValueError('Model needs to be of type UpReducer or UpModel')
         # out here we fetch the data stored in the tree
 
         #for k,val_shape in self.model.up_produces.items():
@@ -30,20 +30,20 @@ class OrderedExecutor(ABC):
         #        tree.add_property(k, val_shape)
 
         if issubclass(type(self.model), UpReducer):
-            new_data = self._up_inner(tree.data, tree, params)
+            new_data = self._reduce_inner(tree.data, tree, params)
 
             tree.data = {**tree.data, **new_data}
 
-            return 
-        elif issubclass(type(self.model), FuseModel):
-            new_data = self._fuse(tree, params = params)
+            return
+        elif issubclass(type(self.model), UpModel):
+            new_data = self._up_inner(tree.data, tree, params = params)
 
             tree.data = {**tree.data, **new_data}
 
             return
 
     @partial(jax.jit, static_argnames=['tree', 'self']) 
-    def _up_inner(self, data, tree, params):
+    def _reduce_inner(self, data, tree, params):
         iterator = zip(
             reversed(tree.levels[1:]), # indices for levels
             #reversed(tree.psizes[:-1]), # indices for grouping calculations
@@ -75,20 +75,37 @@ class OrderedExecutor(ABC):
 
 
         return data
+    @partial(jax.jit, static_argnames=['tree', 'self']) 
+    def _up_inner(self, data, tree, params):
+        iterator = zip(
+            reversed(tree.levels), # indices for levels
+            #reversed(tree.psizes[:-1]), # indices for grouping calculations
+            reversed(tree.pbuckets_ref) # indices for upwards propagation
+        )
+        next(iterator)
+        for (level_start, level_end), up_ref in iterator:
+            node_data = {
+                k: data[k][level_start:level_end]
+                for k in self.model.up_current_keys
+            }
 
-    def _fuse(self, tree : HypTree, params = {}):
-        if not issubclass(type(self.model), FuseModel):
-            raise ValueError('Model needs to be of type FuseModel')
-        # out here we fetch the data stored in the tree
+            child_data = {
+                f'child_{k}': data[k][tree.gather_child_idx[level_start:level_end]]
+                for k in self.model.up_child_keys
+            }
 
-        new_data = self._fuse_inner(tree.data, tree, params)
+            #print("CHILDDD", tree.gather_child_idx[level_start:level_end])
 
-        tree.data = {**tree.data, **new_data}
+            result = self.model.up(**node_data, **child_data, params = params)
+            for k, val in result.items():
+                data[k] = data[k].at[level_start:level_end].set(val)
 
-        return tree
+        return data
+
+
 
     @partial(jax.jit, static_argnames=['tree', 'self']) 
-    def _down_inner(self, data, tree): #inner jitted runner for MAXIMUM PERFORMANCE
+    def _down_inner(self, data, tree, params): #inner jitted runner for MAXIMUM PERFORMANCE
         #print(data, tree.levels)
         for level_start, level_end in tree.levels[1:]:
             node_data = {
@@ -101,7 +118,10 @@ class OrderedExecutor(ABC):
                 for k in self.model.down_parent_keys
             }
 
-            result = self.model.down(**node_data, **parent_data)
+            if params:
+                result = self.model.down(**node_data, **parent_data, params=params)
+            else:
+                result = self.model.down(**node_data, **parent_data)
 
             for k, val in result.items():
                 data[k] = data[k].at[level_start:level_end].set(val)
@@ -135,7 +155,7 @@ class OrderedExecutor(ABC):
             raise ValueError('Model needs to be of type DownModel')
         # out here we fetch the data stored in the tree
 
-        new_data = self._down_inner(tree.data, tree)
+        new_data = self._down_inner(tree.data, tree, params = params)
 
         tree.data = {**tree.data, **new_data}
 

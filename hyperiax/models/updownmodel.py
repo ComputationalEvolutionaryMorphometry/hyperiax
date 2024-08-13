@@ -46,13 +46,20 @@ class DownModel(BaseModel):
         self.down_parent_keys = down_parent_keys
         self.down_child_keys = down_child_keys
 
-class FuseModel(BaseModel):
-    def __init__(self):
-        raise DeprecationWarning('FuseModel is deprecated. Use UpModel instead')
-        self._set_fuse_keys()
+class UpModel(BaseModel):
+    def __init__(self) -> None:
+        super().__init__()
 
     @abstractmethod
-    def fuse(self, **kwargs): ...
+    def up(self, **kwargs): ...
 
-    def _set_fuse_keys(self): 
-        ...
+    def _set_keys(self):
+        arg_spec = getfullargspec(self.up)
+
+        keys = filter_keywords(arg_spec.args)
+
+        up_child_keys = [k.removeprefix('child_') for k in keys if k.startswith('child_')]
+        up_current_keys = [k for k in keys if not k.startswith('child_')]
+
+        self.up_child_keys = up_child_keys
+        self.up_current_keys = up_current_keys

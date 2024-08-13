@@ -1,4 +1,4 @@
-from .updownmodel import UpReducer, DownModel, FuseModel
+from .updownmodel import UpReducer, DownModel, UpModel
 from .updatemodel import UpdateReducer, UpdateModel
 
 class UpLambdaReducer(UpReducer):
@@ -88,8 +88,7 @@ class UpdateLambda(UpdateModel):
     def __init__(self, update_fn) -> None:
         """Lambda model that only contains an up interface
 
-        :param up_fn: param intputs from node to update_fn
-        :param update_fn: function to update or do calculations form up parameters
+        :param update_fn: function to update or do calculations from both parent and child nodes
         """
         self.update = update_fn
 
@@ -97,27 +96,26 @@ class UpdateLambda(UpdateModel):
     
 
     def update(self, *args, **kwargs):
-        """ Fuse function to define calculations from up parameters
-        :return: calculated values from up parameters to parent node
+        """ update function to define calculations from up parameters
+        :return: calculated values from child and parent parameters
         """
-        raise ValueError('Model does not have a valid fuse function')
+        raise ValueError('Model does not have a valid update function')
     
-class FuseLambda(FuseModel):
-    """ Lambda model that only contains a fuse interface
-
-    :param FuseModel: Requires a fuse function.
+class UpLambda(UpModel):
+    """Lambda model that only contains an upward interface
     """
-    def __init__(self, fuse_fn) -> None:
-        """ Initialize FuseLambda model
+    def __init__(self, up_fn) -> None:
+        """Lambda model that only contains an up interface
 
-        :param fuse_fn: function to define values to fuse function
+        :param up_fn: function to take current node and children node values and proive values to se in current
         """
+        self.up = up_fn
 
-        self.fuse = fuse_fn
         super().__init__()
+    
 
-    def fuse(self, *args, **kwargs):
-        """ Fuse function to define values to fuse function
-        :return: input arguments to fuse function
+    def up(self, *args, **kwargs):
+        """ Up function to calculate the upward action on the tree
+        :return: calculated values from child and current values
         """
-        raise ValueError('Model does not have a valid fuse function')
+        raise ValueError('Model does not have a valid up function')

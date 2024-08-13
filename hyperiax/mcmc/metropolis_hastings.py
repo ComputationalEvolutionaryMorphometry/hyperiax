@@ -31,7 +31,7 @@ def metropolis_hastings(log_target, proposal, data, init, num_samples, burn_in=0
         rng_key, subkey = jax.random.split(rng_key)
 
         # Propose a new state
-        proposed_state = proposal(data, current_state, subkey)
+        proposed_state = proposal(current_state, subkey)
 
         # Compute acceptance probability
         log_likelihood_proposed = log_target(data,proposed_state)
