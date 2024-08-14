@@ -103,8 +103,8 @@ class HypTree:
     def __len__(self) -> int:
         return self.size
 
-    def add_property(self, name, shape, initializer = None, key = None):
-        self.data[name] = jnp.empty((self.size, *shape))
+    def add_property(self, name, shape, dtype = None, initializer = None, key = None):
+        self.data[name] = jnp.empty((self.size, *shape), dtype=dtype)
         self.masks[name] = jnp.zeros((self.size,), dtype=bool)
 
     def iter_topology_bfs(self) -> Iterator[TopologyNode]:
