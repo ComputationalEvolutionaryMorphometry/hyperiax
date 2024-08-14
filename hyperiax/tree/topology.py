@@ -92,4 +92,15 @@ def tree_from_newick_recursive(newick_str: str) -> HypTree:
             
         return node, delim
     
-    return HypTree(recursive_parse_newick()[0])
+    root, _ = recursive_parse_newick()
+
+    tree = HypTree(root)
+
+    if 'edge_length' in root.data.keys():
+        tree.add_property('edge_length', (1,), dtype=float)
+
+        for node in tree.iter_topology_bfs():
+            tree.data['edge_length'] = tree.data['edge_length'].at[node.id].set(node.data['edge_length'])
+            del node.data
+    
+    return tree
