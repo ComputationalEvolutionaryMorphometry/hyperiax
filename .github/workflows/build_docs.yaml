@@ -1,0 +1,46 @@
+name: Deploy Sphinx documentation to Pages
+
+on:
+  push:
+    branches: [main, v2] # branch to trigger deployment
+  pull_request:
+    branches: [main, v2]
+  workflow_dispatch:
+  
+# allow manually trigger the action
+
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  deploy-docs:
+    name: build documentation and deploy to github pages
+    runs-on: ubuntu-20.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+    - name: set pandoc
+      run: sudo apt-get update && sudo apt-get install -y pandoc
+
+    - name: read the repo
+      uses: actions/checkout@v4
+
+    - name: install dependencies
+      run: |
+        pip install hyperiax
+        pip install sphinx_rtd_theme 
+        pip install sphinx-autodoc-annotation 
+        pip install nbsphinx
+        pip install markupsafe==2.0.1
+        pip install --upgrade sphinx jinja2
+
+    - name: deployment
+      uses: sphinx-notes/pages@v3
+      with:
+        documentation_path: ./docs/source
