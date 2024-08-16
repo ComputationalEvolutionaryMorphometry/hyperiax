@@ -121,7 +121,6 @@ def write_topology(tree:HypTree) -> str:
     """
     # Check if edge_length exists, otherwise fill it with ones
     if "edge_length" not in tree.data:
-        print("In here?")
         tree.add_property('edge_length', shape=(1,))
         tree.data['edge_length'] =  tree.data['edge_length'].at[:].set(1)
 
