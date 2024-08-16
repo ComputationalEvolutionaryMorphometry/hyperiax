@@ -109,3 +109,30 @@ def read_tree(newick_str: str,return_topology=False) -> HypTree:
                 del node.data
 
         return tree
+    
+
+    
+def write_tree(tree) -> str:
+    """
+    Convert a tree to a Newick string representation.
+
+    :param tree: The tree to convert
+    :return: Newick string representation of the tree
+    """
+    # Check if edge_length exists, otherwise fill it with ones
+    if "edge_length" not in tree.data:
+        print("In here?")
+        tree.add_property('edge_length', shape=(1,))
+        tree.data['edge_length'] =  tree.data['edge_length'].at[:].set(1)
+
+    def recursive_to_newick(node) -> str:
+        edge_length = tree.data["edge_length"].at[node.id].get().item()
+
+        if not node.children:
+            return f"{node.name}:{edge_length:.4f}" if node.name else f":{edge_length:.4f}"
+        
+        children_str = ",".join(recursive_to_newick(child) for child in node.children)
+        node_str = f"({children_str}){node.name}:{edge_length:.4f}" if node.name else f"({children_str}):{edge_length:.4f}"
+        return node_str
+
+    return recursive_to_newick(tree.topology_root) + ";"
