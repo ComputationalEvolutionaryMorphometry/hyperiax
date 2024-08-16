@@ -58,7 +58,7 @@ def asymmetric_topology(h: int)  -> TopologyNode:
 
 
 ### Alternative Newick tree generation
-def read_tree(newick_str: str,return_topology=False) -> HypTree:
+def read_topology(newick_str: str,return_topology=False) -> HypTree:
     """ 
     Generate a tree from a Newick string recursively.
 
@@ -112,7 +112,7 @@ def read_tree(newick_str: str,return_topology=False) -> HypTree:
     
 
     
-def write_tree(tree) -> str:
+def write_topology(tree:HypTree) -> str:
     """
     Convert a tree to a Newick string representation.
 
