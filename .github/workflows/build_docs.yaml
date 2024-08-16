@@ -17,7 +17,7 @@ permissions:
 jobs:
   deploy-docs:
     name: build documentation and deploy to github pages
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -33,12 +33,18 @@ jobs:
 
     - name: install dependencies
       run: |
-        pip install hyperiax
-        pip install sphinx_rtd_theme 
-        pip install sphinx-autodoc-annotation 
-        pip install nbsphinx
-        pip install markupsafe==2.0.1
-        pip install --upgrade sphinx jinja2
+        python -m pip install --upgrade pip
+        pip install -r docs/requirements.txt
+    
+    # - name: build documentation with sphinx
+    #   run: |
+    #     sphinx-build -b html ./docs/source ./docs/build/html
+    
+    # - name: deploy to github pages
+    #   uses: peaceiris/actions-gh-pages@v4
+    #   with:
+    #     github_token: ${{ secrets.GITHUB_TOKEN }}
+    #     publish_dir: ./docs/build/html
 
     - name: deployment
       uses: sphinx-notes/pages@v3
