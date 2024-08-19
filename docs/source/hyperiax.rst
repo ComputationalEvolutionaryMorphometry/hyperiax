@@ -1,16 +1,17 @@
-hyperiax package
+Hyperiax APIs
 ================
 
 Subpackages
 -----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 1
 
    hyperiax.execution
    hyperiax.mcmc
    hyperiax.models
    hyperiax.tree
+   hyperiax.plotting
 
 Module contents
 ---------------

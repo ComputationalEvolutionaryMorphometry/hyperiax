@@ -12,6 +12,7 @@ class TopologyNode:
     parent : TopologyNode = None
     children : List[TopologyNode] = field(default_factory=list)
     _backref : HypTree = None
+    name : str = None
     def __getitem__(self, arg):
         if not self._backref:
             raise ValueError("This node is not part of a tree")

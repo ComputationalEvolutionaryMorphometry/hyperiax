@@ -8,7 +8,7 @@ authors = [
   { name="Morten Akhøj Pedersen", email="***@di.ku.dk" },
   { name="Nicklas Boserup", email="***@di.ku.dk" }
 ]
-description = "Tree traversals using Jax"
+description = "Tree traversals using JAX"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
@@ -39,6 +39,12 @@ dev = [
     "matplotlib",
     "mypy",
     "pytest",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-annotation",
+    "nbsphinx",
+    "markupsafe==2.0.1",
+    "ipython"
 ]
 
 [project.urls]

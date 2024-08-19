@@ -29,7 +29,7 @@ Installation
     $ pip install -e hyperiax[examples]
     # to install the dependencies for all the example notebooks
 
-Check out the :doc:`usage` section for further information
+Check out the :doc:`Usage` section for further information
 
 .. note::
 
