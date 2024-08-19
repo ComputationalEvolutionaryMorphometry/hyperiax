@@ -33,20 +33,21 @@ pip install -e hyperiax[examples]
 - Set up a tree
 ```python
 # Initialize a tree with a height of 4 and a degree of 3
-tree = hyperiax.tree.builders.symmetric_tree(h=4, degree=3)
+topology = symmetric_topology(height=3, degree=2)
 # Visualize
-tree.plot_tree()
+plot_tree_text(topology)
 
-# Initialize the data value in nodes and branch lengths with example initialized data
+# Create tree for fast computation
+tree = HypTree(topology)
+
+tree.add_property('noise', shape=(2,))
+tree.add_property('edge_length', shape=(1,))
+tree.add_property('value', shape=(2,))
+
+# Initialize the data
 key = jax.random.PNGKey(0)
 # Randomly initialized values and lengths
-exmp_values = jax.random.normal(key, shape=(16, ))
-exmp_lengths = jax.random.uniform(key, shape=(16, ))
-# Assign the values and lengths by broadcasting
-tree["value"] = init_values
-tree["edge_length"] = init_lengths
-# Initialize the noise within the tree
-noisy_tree = hyperiax.tree.initializers.initialize_noise(tree, key, shape=(1, ))
+tree.data['noise'] = jax.random.normal(key, shape=tree.data['noise'].shape)
 ```
 
 - Define operations and executor
@@ -56,24 +57,19 @@ noisy_tree = hyperiax.tree.initializers.initialize_noise(tree, key, shape=(1, ))
 def down(noise, edge_length, parent_value, **kwargs):    # example down function, insert your own one
     return {"value": jnp.sqrt(edge_length) * noise + parent_value}
 
-up = jaxtrees.models.functional.pass_up('value', 'edge_length')
-
-@jax.jit
-def fuse(child_value, child_edge_length, **kwargs):    # example fuse function, insert your own one
-    child_edge_length_inv = 1. / child_edge_length
-    res = jnp.einsum('b1,bd->d', child_edge_length_inv, child_value) / child_edge_length.sum()
-    return {"value": res}
 ```
 - Run the simulation
 ```python
-# Wrap all the functions in one model
-updown_model = hyperiax.model.lambdamodels.UpDownLambda(up, fuse, down)
+# Wrap all the down pass in one model
+downmodel = DownLambda(down_fn=down)
 # Define the executor and run it
-exe = hyperiax.execution.DependencyTreeExecutor(updown_model, batch_size=5)
-# Do the inference from bottom to top
-inf_tree = exe.up(noisy_tree)
+exe = OrderedExecutor(downmodel)
 # Do the sampling from top to bottom
-sample_tree = exe.down(noisy_tree)
+exe.down(noisy_tree)
+
+# Find the simulated data via
+# tree.iter_topology()
+# or tree.data
 ```
 See [Examples](https://github.com/ComputationalEvolutionaryMorphometry/hyperiax/wiki/Examples) for more specific examples.
 ## Documentation
