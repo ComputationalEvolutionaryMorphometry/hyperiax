@@ -1,0 +1,5 @@
+hyperiax
+sphinx-rtd-theme
+sphinx-autodoc-annotation
+nbsphinx
+markupsafe==2.0.1

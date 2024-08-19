@@ -1,74 +1,95 @@
-from typing import Any
-
-from ..tree import TreeNode
-from ..models import UpdateModel
-from ..tree import HypTree
-from abc import abstractmethod
-from .collate import dict_collate
+from ..models import UpdateReducer, UpdateModel
+import jax
+from inspect import getfullargspec
+from functools import partial
+from jax import numpy as jnp
 
 class UnorderedExecutor:
     "Executes nodes in an unstructured way; giving full context from both parents and children"
 
-    def __init__(self, model : UpdateModel) -> None:
+    def __init__(self, model, key = None) -> None:
         self.model = model
-        self.iterator_states = {}
 
-    @abstractmethod
-    def _determine_execution_pools(self, tree : HypTree):
-        ...
+        self.key = key if key else jax.random.PRNGKey(0)
+        self.model = model
 
-    @abstractmethod
-    def _iter_pools(self, pools):
-        ...
+    def update(self, tree, params = {}):
+        if issubclass(type(self.model), UpdateReducer):
+            new_data = self._update_reduce_inner(tree.data, tree, params)
+        elif issubclass(type(self.model), UpdateModel):
+            coloring = tree.coloring
+            red_indx = jnp.arange(tree.size)[coloring]
+            new_data = self._update_inner(tree.data, tree, red_indx, params)
+            black_indx = jnp.arange(tree.size)[~coloring]
+            new_data = self._update_inner(new_data, tree, black_indx, params)
+        else:
+            raise ValueError('Model needs to be of type UpdateReducer or UpdateModel')
+        tree.data = {**tree.data, **new_data}
 
-    def get_iterator(self, tree : HypTree):
-        """Get the iterator that runs over the tree
+    @partial(jax.jit, static_argnames=['tree', 'self']) 
+    def _update_inner(self, data, tree, coloring, params):
+        node_data = {
+            k: data[k][coloring]
+            for k in self.model.update_current_keys
+        }
+        parent_data = {
+            f'parent_{k}': data[k][tree.parents[coloring]]
+            for k in self.model.update_parent_keys
+        }
+        child_data = {
+            f'child_{k}': data[k][tree.gather_child_idx[coloring]]
+            for k in self.model.update_child_keys
+        }
 
-        Args:
-            tree (HypTree): the tree to run over
+        result = self.model.update(**parent_data, **node_data, **child_data, 
+                        root_mask=tree.is_root[coloring], 
+                        leaf_mask=tree.is_leaf[coloring], params = params)
 
-        Returns:
-            iterable: the iterator
-        """
-        pools = self._determine_execution_pools(tree)
-        pooliter = iter(self._iter_pools(pools))
-        return UpdateIterator(pooliter)
+        for k, val in result.items():
+            data[k] = data[k].at[coloring].set(val)
 
-    def update(self, node : TreeNode, params):
-        """This method executes the model implementation on the given node using the sampled params
+        return data
 
-        Args:
-            node (TreeNode): The node to execute on
-            params (dict): the sampled params to use
 
-        Returns:
-            bool: whether or not the sampled parameters should be accepted.
-        """
-        child_data = dict_collate([child.data for child in node.children]) if node.children else {}
-        parent = node.parent.data if node.parent else {}
-
-        new_vals, accept = self.model.update(
-            parent_value=parent, 
-            children_values=child_data, 
-            node_value = node.data,
-            parameters = params
+    @partial(jax.jit, static_argnames=['tree', 'self']) 
+    def _update_reduce_inner(self, data, tree, params):
+        iterator = zip(
+            reversed(tree.levels[1:]), # indices for levels
+            reversed(tree.pbuckets_ref) # indices for upwards propagation
         )
+        unrolled = list(iterator)
+        i1 = unrolled[::2]
+        i2 = unrolled[1::2]
+        # we can make this much faster by actually merging the underlying structures... #TODO
+        for it in (i1, i2):
+            for (level_start, level_end), up_ref in it:
+                child_node_data = {
+                    k: jax.lax.slice_in_dim(data[k], level_start, level_end)
+                    for k in self.up_keys
+                }
+                #print(child_node_data)
+                up_result = self.model.up(**child_node_data, params = params)
 
-        node.data = {**node.data, **new_vals}
+                segments = tree.pbuckets[level_start:level_end]
 
-        return accept
+                fuse_scatter = {
+                    f'child_{k}': self.model.reductions[k](v, segments, num_segments=len(up_ref), indices_are_sorted=True)
+                    for k,v in up_result.items()
+                }
+
+                node_data = {
+                    k: data[k][up_ref]
+                    for k in self.update_node_keys
+                }
+
+                parent_data = {
+                    f'parent_{k}': data[k][tree.parents[up_ref]]
+                    for k in self.update_parent_keys
+                }
+
+                result = self.model.update(**parent_data, **node_data, **fuse_scatter, params = params)
+                for k, val in result.items():
+                    data[k] = data[k].at[up_ref].set(val)
 
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        pass
-
-class UpdateIterator:
-    """Does nothing, but name is used to disambiguate"""
-    def __init__(self, pool_iter) -> None:
-        self._iter_internal = pool_iter
-    def __iter__(self):
-        iter(self._iter_internal)
-        return self
-    
-    def __next__(self):
-        return next(self._iter_internal)
+        return data

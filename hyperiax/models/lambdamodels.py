@@ -1,63 +1,34 @@
-from .updownmodel import UpModel, UpDownModel, DownModel
-from .updatemodel import UpdateModel
+from .updownmodel import UpReducer, DownModel, UpModel
+from .updatemodel import UpdateReducer, UpdateModel
 
-class UpLambda(UpModel):
+class UpLambdaReducer(UpReducer):
     """ Lambda model that only contains an up interface
 
     :param UpModel: Requires an up and fuse function.
     """
-    def __init__(self, up_fn, fuse_fn) -> None:
+    def __init__(self, up_fn, transform_fn, reductions) -> None:
         """Lambda model that only contains an up interface
 
-        :param up_fn: param intputs from node to fuse_fn
-        :param fuse_fn: function to fuse or do calculations form up parameters
+        :param up_fn: param intputs from node to transform_fn
+        :param transform_fn: function to transform or do calculations form up parameters
         """
-        super().__init__()
 
-        self.up_fn = up_fn
-        self.fuse_fn = fuse_fn
+        self.up = up_fn
+        self.transform = transform_fn
 
-    def up(self, *args, **kwargs):
-        """ Up function to define values to fuse function
-        :return: input arguments to fuse function
-        """
-        return self.up_fn(*args, **kwargs)
-    
-    def fuse(self, *args, **kwargs):
-        """ Fuse function to define calculations from up parameters
-        :return: calculated values from up parameters to parent node
-        """
-        return self.fuse_fn(*args, **kwargs)
-    
-class UpDownLambda(UpDownModel):
-    """Lambda model that only contains both an up and down interface.  
-
-    :param UpDownModel: Requires an up, fuse and down function.
-    """
-    def __init__(self, up_fn, fuse_fn, down_fn) -> None:
-        super().__init__()
-
-        self.up_fn = up_fn
-        self.fuse_fn = fuse_fn
-        self.down_fn = down_fn
+        super().__init__(reductions=reductions)
 
     def up(self, *args, **kwargs):
         """ Up function to define values to fuse function
         :return: input arguments to fuse function
         """
-        return self.up_fn(*args, **kwargs)
+        raise ValueError('Model does not have a valid up function')
     
-    def fuse(self, *args, **kwargs):
+    def transform(self, *args, **kwargs):
         """ Fuse function to define calculations from up parameters
         :return: calculated values from up parameters to parent node
         """
-        return self.fuse_fn(*args, **kwargs)
-    
-    def down(self, *args, **kwargs):
-        """ Down function to define values to fuse function
-        :return: input arguments to fuse function
-        """
-        return self.down_fn(*args, **kwargs)
+        raise ValueError('Model does not have a valid fuse function')
     
 class DownLambda(DownModel):
     """ Lambda model that only contains a down interface
@@ -70,33 +41,81 @@ class DownLambda(DownModel):
 
         :param down_fn: function to define values to fuse function
         """
+        self.down = down_fn # need to do this to carry the argspec
+    
         super().__init__()
 
-        self.down_fn = down_fn
-    
     def down(self, *args, **kwargs):
         """ Down function to define values to fuse function
         :return: input arguments to fuse function
         """
-        return self.down_fn(*args, **kwargs)
+        raise ValueError('Model does not have a valid down function')
     
+class UpdateLambdaReducer(UpdateReducer):
+    """Lambda model that only contains a local update interface
+
+    :param UpdateModel: Requires an update function.
+    """
+    def __init__(self, up_fn, update_fn, reductions) -> None:
+        """Lambda model that only contains an up interface
+
+        :param up_fn: param intputs from node to update_fn
+        :param update_fn: function to update or do calculations form up parameters
+        """
+        self.up = up_fn
+        self.update = update_fn
+
+        super().__init__(reductions=reductions)
+
+    def up(self, *args, **kwargs):
+        """ Up function to define values to fuse function
+        :return: input arguments to fuse function
+        """
+        raise ValueError('Model does not have a valid up function')
+    
+    def update(self, *args, **kwargs):
+        """ Fuse function to define calculations from up parameters
+        :return: calculated values from up parameters to parent node
+        """
+        raise ValueError('Model does not have a valid fuse function')
+    
+
 class UpdateLambda(UpdateModel):
     """Lambda model that only contains a local update interface
 
     :param UpdateModel: Requires an update function.
     """
     def __init__(self, update_fn) -> None:
-        """ Initialize DownLambda model
+        """Lambda model that only contains an up interface
 
-        :param down_fn: function to define values to fuse function
+        :param update_fn: function to update or do calculations from both parent and child nodes
         """
-        super().__init__()
+        self.update = update_fn
 
-        self.update_fn = update_fn
+        super().__init__()
+    
 
     def update(self, *args, **kwargs):
-        """ Update function to define values to fuse function
-
-        :return: input arguments to fuse function
+        """ update function to define calculations from up parameters
+        :return: calculated values from child and parent parameters
         """
-        return self.update_fn(*args, **kwargs)
+        raise ValueError('Model does not have a valid update function')
+    
+class UpLambda(UpModel):
+    """Lambda model that only contains an upward interface
+    """
+    def __init__(self, up_fn) -> None:
+        """Lambda model that only contains an up interface
+
+        :param up_fn: function to take current node and children node values and proive values to se in current
+        """
+        self.up = up_fn
+
+        super().__init__()
+    
+
+    def up(self, *args, **kwargs):
+        """ Up function to calculate the upward action on the tree
+        :return: calculated values from child and current values
+        """
+        raise ValueError('Model does not have a valid up function')
