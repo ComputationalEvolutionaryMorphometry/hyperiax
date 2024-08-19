@@ -7,6 +7,7 @@ import jax
 
 
 
+
 @fixture
 def small_tree():
     return HypTree(symmetric_topology(5,2))

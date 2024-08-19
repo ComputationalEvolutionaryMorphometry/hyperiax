@@ -7,12 +7,8 @@ Usage
 
    ./notebooks/tree_building
    ./notebooks/mean_estimation
-   ./notebooks/Upwards_LDDMM
-   ./notebooks/mcmc_Gaussian_BFFG
-   .. ./examples/mcmc_Gaussian_BFFG
-
-
-
+   ./notebooks/upwards_lddmm
+   ./notebooks/mcmc_gaussian_bffg
 
 .. ------------
 .. Build a tree
