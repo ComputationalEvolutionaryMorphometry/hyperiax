@@ -7,15 +7,12 @@ from jax import numpy as jnp
 class UnorderedExecutor:
     "Executes nodes in an unstructured way; giving full context from both parents and children"
 
-    def __init__(self, model, key = None) -> None:
+    def __init__(self, model) -> None:
         self.model = model
 
-        self.key = key if key else jax.random.PRNGKey(0)
-        self.model = model
-
-    def update(self, tree, params = {}):
+    def update(self, tree, key, params = {}):
         if issubclass(type(self.model), UpdateReducer):
-            new_data = self._update_reduce_inner(tree.data, tree, params)
+            new_data = self._update_reduce_inner(tree.data, tree, params, key)
         elif issubclass(type(self.model), UpdateModel):
             coloring = tree.coloring
             red_indx = jnp.arange(tree.size)[coloring]
@@ -51,8 +48,8 @@ class UnorderedExecutor:
         return data
 
 
-    @partial(jax.jit, static_argnames=['tree', 'self']) 
-    def _update_reduce_inner(self, data, tree, params):
+    #@partial(jax.jit, static_argnames=['tree', 'self']) 
+    def _update_reduce_inner(self, data, tree, params, key):
         iterator = zip(
             reversed(tree.levels[1:]), # indices for levels
             reversed(tree.pbuckets_ref) # indices for upwards propagation
@@ -61,11 +58,12 @@ class UnorderedExecutor:
         i1 = unrolled[::2]
         i2 = unrolled[1::2]
         # we can make this much faster by actually merging the underlying structures... #TODO
+        key, k1 = jax.random.split(key)
         for it in (i1, i2):
             for (level_start, level_end), up_ref in it:
                 child_node_data = {
                     k: jax.lax.slice_in_dim(data[k], level_start, level_end)
-                    for k in self.up_keys
+                    for k in self.model.update_child_keys
                 }
                 #print(child_node_data)
                 up_result = self.model.up(**child_node_data, params = params)
@@ -79,15 +77,20 @@ class UnorderedExecutor:
 
                 node_data = {
                     k: data[k][up_ref]
-                    for k in self.update_node_keys
+                    for k in self.model.update_node_keys
                 }
 
                 parent_data = {
                     f'parent_{k}': data[k][tree.parents[up_ref]]
-                    for k in self.update_parent_keys
+                    for k in self.model.update_parent_keys
                 }
+                print(tree.is_root[up_ref])
+                print(tree.is_leaf[up_ref])
 
-                result = self.model.update(**parent_data, **node_data, **fuse_scatter, params = params)
+                result = self.model.update(
+                    **parent_data, **node_data, **fuse_scatter, 
+                    root_mask=tree.is_root[up_ref], 
+                    leaf_mask=tree.is_leaf[up_ref],params = params, key=k1)
                 for k, val in result.items():
                     data[k] = data[k].at[up_ref].set(val)
 

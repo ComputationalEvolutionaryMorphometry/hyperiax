@@ -55,7 +55,13 @@ class OrderedExecutor(ABC):
                 for k in self.model.up_keys
             }
             #print(node_data)
-            up_result = self.model.up(**node_data, params = params)
+            parent_indices = tree.parents[level_start:level_end] # no need to lax since tree is untraced
+            parent_data = {
+                f'parent_{k}': data[k][parent_indices]
+                for k in self.model.up_parent_keys
+            }
+
+            up_result = self.model.up(**node_data, **parent_data, params = params)
 
             segments = tree.pbuckets[level_start:level_end]
 
@@ -70,6 +76,7 @@ class OrderedExecutor(ABC):
             }
 
             result = self.model.transform(**parent_data, **fuse_scatter, params = params)
+            
             for k, val in result.items():
                 data[k] = data[k].at[up_ref].set(val)
 
@@ -94,9 +101,15 @@ class OrderedExecutor(ABC):
                 for k in self.model.up_child_keys
             }
 
+            parent_indices = tree.parents[level_start:level_end] # no need to lax since tree is untraced
+            parent_data = {
+                f'parent_{k}': data[k][parent_indices]
+                for k in self.model.up_parent_keys
+            }
+
             #print("CHILDDD", tree.gather_child_idx[level_start:level_end])
 
-            result = self.model.up(**node_data, **child_data, params = params)
+            result = self.model.up(**node_data, **child_data, **parent_data, params = params)
             for k, val in result.items():
                 data[k] = data[k].at[level_start:level_end].set(val)
 

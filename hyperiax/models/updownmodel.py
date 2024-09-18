@@ -16,8 +16,11 @@ class UpReducer(ReducerModel):
     def _set_keys(self):
         up_arg_spec = getfullargspec(self.up)
         upkeys = filter_keywords(up_arg_spec.args)
+
+        up_parent_keys = [k.removeprefix('parent_') for k in upkeys if k.startswith('parent_')]
+        upkeys = [k for k in upkeys if not k.startswith('parent_')]
         self.up_keys = [k for k in upkeys if k != 'self']
-        self.up_keys
+        self.up_parent_keys = up_parent_keys
 
         transform_arg_spec = getfullargspec(self.transform)
         keys = filter_keywords(transform_arg_spec.args)
@@ -61,5 +64,9 @@ class UpModel(BaseModel):
         up_child_keys = [k.removeprefix('child_') for k in keys if k.startswith('child_')]
         up_current_keys = [k for k in keys if not k.startswith('child_')]
 
+        up_parent_keys = [k.removeprefix('parent_') for k in keys if k.startswith('parent_')]
+        up_current_keys = [k for k in up_current_keys if not k.startswith('parent_')]
+
         self.up_child_keys = up_child_keys
         self.up_current_keys = up_current_keys
+        self.up_parent_keys = up_parent_keys

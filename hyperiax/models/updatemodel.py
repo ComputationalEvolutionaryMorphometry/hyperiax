@@ -15,20 +15,22 @@ class UpdateReducer(ReducerModel):
     def up(self, **kwargs): ...
 
     def _set_keys(self):
-        up_arg_spec = getfullargspec(self.model.up)
+        up_arg_spec = getfullargspec(self.up)
         upkeys = up_arg_spec.args
         filter_keywords(upkeys)
         self.up_keys = upkeys
 
 
-        update_arg_spec = getfullargspec(self.model.update)
+        update_arg_spec = getfullargspec(self.update)
         keys = filter_keywords(update_arg_spec.args)
 
         update_parent_keys = [k.removeprefix('parent_') for k in keys if k.startswith('parent_')]
         update_node_keys = [k for k in keys if not k.startswith('parent_') and not k.startswith('child_')]
+        update_child_keys = [k.removeprefix('child_') for k in keys if k.startswith('child_')]
 
         self.update_parent_keys = update_parent_keys
         self.update_node_keys = update_node_keys
+        self.update_child_keys = update_child_keys
 
 class UpdateModel(BaseModel):
     def __init__(self) -> None:
