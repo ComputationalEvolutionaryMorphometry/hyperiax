@@ -96,7 +96,13 @@ class OrderedExecutor(ABC):
 
             #print("CHILDDD", tree.gather_child_idx[level_start:level_end])
 
-            result = self.model.up(**node_data, **child_data, params = params)
+            result = self.model.up(
+                **node_data,
+                **child_data, 
+                root_mask=tree.is_root[level_start:level_end], 
+                leaf_mask=tree.is_leaf[level_start:level_end],
+                params = params)
+            
             for k, val in result.items():
                 data[k] = data[k].at[level_start:level_end].set(val)
 
