@@ -104,3 +104,44 @@ If you are using VScode, it is easy to generate such template automatically usin
 
 - Document all public classes, methods, and functions using clear and concise comments and docstrings.
 - Update the README.md file with any relevant changes to the project, including installation and usage instructions.
+
+### Build Documentation Locally
+The documentation compiling replies on _sphinx_ package, to install it, use _pip_:
+``` bash
+$ pip install sphinx
+```
+After install _sphinx_, check if there are three major files under `./docs` directory: `make.bat`, `Makefile` and `source/config.py`. If not, run
+``` bash
+$ sphinx-quickstart
+```
+to automatically generate these files, and add manually
+``` python
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../../hyperiax/'))
+``` 
+into `source/config.py` in the beginning to configure the directory for _sphinx_ to find the source code.
+
+You may also need to install additional packages
+* _sphinx-rtd-theme_: to use the readthedoc theme) 
+* _sphinx-autodoc-annotation_: for automatic type annotation). 
+* _nbsphinx_: for compiling jupyter notebooks
+* _pandoc_: addons for _nbsphinx_
+To install them except _pandoc_, use pip:
+``` bash
+$ pip install sphinx_rtd_theme
+$ pip install sphinx-autodoc-annotation
+$ pip install nbsphinx
+```
+To install _pandoc_, in MacOS, using _brew_:
+``` bash
+$ brew install pandoc
+```
+
+After everything is installed, you can compile the documentation locally:
+``` bash
+$ cd ./docs
+$ make clean
+$ make html
+```
+This should generate compiled html files under `./docs/build/` directory.
