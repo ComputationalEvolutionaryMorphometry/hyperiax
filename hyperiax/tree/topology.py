@@ -58,7 +58,7 @@ def asymmetric_topology(h: int)  -> TopologyNode:
 
 
 ### Alternative Newick tree generation
-def read_topology(newick_str: str,return_topology=False) -> HypTree:
+def read_topology(newick_str: str,return_topology=False,precompute_child_gathers=True) -> HypTree:
     """ 
     Generate a tree from a Newick string recursively.
 
@@ -78,7 +78,6 @@ def read_topology(newick_str: str,return_topology=False) -> HypTree:
                        children=[])
         node.data = {"edge_length": float(length)} if length else {}
 
-        
         if char == "(": # start a subtree
 
             while char in "(,": # add all children within a parenthesis to the current node
@@ -99,14 +98,16 @@ def read_topology(newick_str: str,return_topology=False) -> HypTree:
         return root
 
     else: 
-        tree = HypTree(root)
+        # Add edge lengths 
+        tree = HypTree(root,precompute_child_gathers)
 
-        if 'edge_length' in root.data.keys():
+        if 'edge_length' in root.children[0].data.keys():
             tree.add_property('edge_length', (1,), dtype=float)
 
             for node in tree.iter_topology_bfs():
-                tree.data['edge_length'] = tree.data['edge_length'].at[node.id].set(node.data['edge_length'])
-                del node.data
+                if node.parent is not None:
+                    tree.data['edge_length'] = tree.data['edge_length'].at[node.id].set(node.data['edge_length'])
+                #del node.data
 
         return tree
     
