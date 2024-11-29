@@ -4,10 +4,10 @@ library("phytools")
 
 # Read data
 
-tree <- read.tree(file='data/tree.tre')
+tree <- read.tree(file='data-R/tree.tre')
 plot(tree)
 
-taxa <- read.table("data/character.txt", sep = "\t", header = FALSE, stringsAsFactors = FALSE)
+taxa <- read.table("data-R/character.txt", sep = "\t", header = FALSE, stringsAsFactors = FALSE)
 taxa
 
 #------ Run ML

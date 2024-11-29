@@ -27,10 +27,10 @@ plot(hist)
 # Uncomment to use
 
 # # tree
-# write.tree(tree, file='data/tree.tre')
+# write.tree(tree, file='data-R/tree.tre')
 # # character
 # taxa <- cbind(hist$tip.label, hist$states)
-# write.table(taxa, file = "data/character.txt", sep = "\t", row.names = F, col.names = F, quote = FALSE)
+# write.table(taxa, file = "data-R/character.txt", sep = "\t", row.names = F, col.names = F, quote = FALSE)
 
 
 #-------------- read in python as:
