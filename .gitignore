@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# R
+*.Rproj
+
 # C extensions
 *.so
 
@@ -175,3 +178,4 @@ examples/example_data
 *test.ipynb
 *.cpp
 .vscode/
+.Rproj.user

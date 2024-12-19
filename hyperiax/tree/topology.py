@@ -98,7 +98,7 @@ def read_topology(newick_str: str,return_topology=False,precompute_child_gathers
         return root
 
     else: 
-        # Add edge lengths 
+
         tree = HypTree(root,precompute_child_gathers)
 
         if 'edge_length' in root.children[0].data.keys():
