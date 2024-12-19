@@ -78,7 +78,6 @@ def read_topology(newick_str: str,return_topology=False,precompute_child_gathers
                        children=[])
         node.data = {"edge_length": float(length)} if length else {}
 
-        
         if char == "(": # start a subtree
 
             while char in "(,": # add all children within a parenthesis to the current node
@@ -99,6 +98,7 @@ def read_topology(newick_str: str,return_topology=False,precompute_child_gathers
         return root
 
     else: 
+
         tree = HypTree(root,precompute_child_gathers)
 
         if 'edge_length' in root.children[0].data.keys():
