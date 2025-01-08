@@ -129,26 +129,12 @@ class HypTree:
     def __str__(self):
         return self.__repr__()
 
-    # Extra transversel methods for the tree
-    def iter_topology_dfs(self) -> Iterator[TopologyNode]:
-        """
-        Iterate over all of the nodes in a depth-first manner.
 
-        """
-        stack = deque([self.topology_root])
-
-        while stack:
-            current = stack.pop()
-            if current.children:
-                stack.extend(current.children)
-            yield current
     
-    def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
+    def iter_topology_leaves_bfs(self) -> Iterator[TopologyNode]:
         """
-        Iterate over all of the leaves in the tree, in a depth-first manner.
-
+        Iterate over all of the leaves in the tree, in a breadth-first manner.
         """
-
         queue = deque([self.topology_root])
 
         while queue:
@@ -160,8 +146,7 @@ class HypTree:
     
     def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
         """
-        Iterates over the leaves in the tree using depth-first search.
-        Note that this is not the same as iter_topology_leaves_dfs, as this method is bfs 
+        Iterate over all of the leaves in the tree, in a depth-first manner.
         """
         stack = deque([self.topology_root])
 
