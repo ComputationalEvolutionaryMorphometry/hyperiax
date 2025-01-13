@@ -22,6 +22,9 @@ def trace_plots(samples):
         ax.plot(np.array([sample[param].value for sample in samples]))
         ax.set_title(f"Trace for {param}")
         ax.set_xlabel('Iteration')
+        # Add mean line
+        mean_val = np.mean([sample[param].value for sample in samples])
+        ax.axhline(y=mean_val,color='r',linestyle='-')
         ax.set_ylabel(param)
         ax.grid(True)
 

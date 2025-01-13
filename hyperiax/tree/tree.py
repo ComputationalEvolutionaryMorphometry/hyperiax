@@ -103,7 +103,7 @@ class HypTree:
     def __len__(self) -> int:
         return self.size
 
-    def add_property(self, name, shape, dtype = None, initializer = None, key = None):
+    def add_property(self, name, shape = (), dtype = None, initializer = None, key = None):
         self.data[name] = jnp.empty((self.size, *shape), dtype=dtype)
         self.masks[name] = jnp.zeros((self.size,), dtype=bool)
 
@@ -143,12 +143,10 @@ class HypTree:
                 stack.extend(current.children)
             yield current
     
-    def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
+    def iter_topology_leaves_bfs(self) -> Iterator[TopologyNode]:
         """
-        Iterate over all of the leaves in the tree, in a depth-first manner.
-
+        Iterate over all of the leaves in the tree, in a breadth-first manner.
         """
-
         queue = deque([self.topology_root])
 
         while queue:
@@ -161,7 +159,6 @@ class HypTree:
     def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
         """
         Iterates over the leaves in the tree using depth-first search.
-        Note that this is not the same as iter_topology_leaves_dfs, as this method is bfs 
         """
         stack = deque([self.topology_root])
 
