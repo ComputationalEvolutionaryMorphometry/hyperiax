@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # trace plots for MCMC
-def trace_plots(samples):
+def trace_plots(samples,true_params=None):
     """ Trace plots 
     
     :param samples: A list of ParameterStore objects.
@@ -27,6 +27,9 @@ def trace_plots(samples):
         ax.axhline(y=mean_val,color='r',linestyle='-')
         ax.set_ylabel(param)
         ax.grid(True)
+        if true_params is not None:
+            ax.axhline(y=true_params[param],color='g',linestyle='--')
+        ax.set_ylim(bottom=0)
 
     # Remove any unused subplots
     for ax in axes.ravel()[num_params:]:

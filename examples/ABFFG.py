@@ -4,7 +4,7 @@ import jax.numpy as jnp
 
 from examples.SDE import dot, solve, forward
 
-# functions for pullback and likelihood ratios, see https://arxiv.org/abs/2203.04155 section 6.1 for details
+# functions for pullback and likelihood ratios, see https://arxiv.org/abs/2010.03509 section 6.1 for details
 quadratic = lambda x,H: jnp.dot(x,jnp.dot(H,x))
 logphi = lambda x,mu,Sigma: jax.scipy.stats.multivariate_normal.logpdf(x,mu,Sigma) # log Gaussian density given precision matrix H
 phi = lambda x,mu,Sigma: jax.scipy.stats.multivariate_normal.pdf(x,mu,Sigma) # Gaussian density in standard form

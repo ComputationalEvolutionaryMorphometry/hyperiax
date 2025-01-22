@@ -3,7 +3,7 @@ from ..tree import HypTree
 from matplotlib import pyplot as plt
 from matplotlib import patches as mpatch
 
-cmap = plt.cm.ocean
+cmap = lambda x: plt.cm.ocean(x*.9) # use a slightly darker color for the levels
 
 def plot_tree_2d_scatter(tree : HypTree, property : str, ax=None, selector=lambda z: z):
 
@@ -14,7 +14,10 @@ def plot_tree_2d_scatter(tree : HypTree, property : str, ax=None, selector=lambd
         for nodeidx in range(l_start, l_end):
             cdat = selector(tree.data[property][nodeidx])
             cdat = cdat if len(cdat.shape) == 1 else cdat[-1] # possibly to last value if dat is a trajectory of values
-            ax.scatter(*cdat, color=cmap(i/len(tree.levels)))
+            if len(cdat.shape) == 1:
+                ax.scatter(*cdat, color=cmap(i/len(tree.levels)))
+            else:
+                ax.scatter(cdat[:,0], cdat[:,1], color=cmap(i/len(tree.levels)))
 
             # plot transition from parent to child
             if nodeidx == 0: continue
@@ -26,6 +29,9 @@ def plot_tree_2d_scatter(tree : HypTree, property : str, ax=None, selector=lambd
                 ax.arrow(*dat, *(cdat-dat), width=0.01, length_includes_head=True, color=cmap(i/len(tree.levels)))
             elif len(cdat.shape) == 2:
                 ax.plot(cdat[:,0], cdat[:,1], color=cmap(i/len(tree.levels)))
+            elif len(cdat.shape) == 3:
+                for j in range(cdat.shape[1]):
+                    ax.plot(cdat[:,j,0], cdat[:,j,1], color=cmap(i/len(tree.levels)))
 
         handles = [mpatch.Patch(color=cmap(i/len(tree.levels)), label = f'{i+1}') for i in range(len(tree.levels))]
         legend = ax.legend(handles=handles, title="Levels")
@@ -43,7 +49,10 @@ def plot_tree_3d_scatter(tree : HypTree, property : str, ax=None, selector=lambd
         for node in level:
             dat = selector(tree.data[property][node.id])
             dat = dat if len(dat.shape) == 1 else dat[-1] # possibly to last value if dat is a trajectory of values
-            ax.scatter(*dat, color=cmap(i/len(tree.levels)))
+            if len(dat.shape) == 1:
+                ax.scatter(*dat, color=cmap(i/len(tree.levels)))
+            else:
+                ax.scatter(dat[:,0], dat[:,1], dat[:,2], color=cmap(i/len(tree.levels)))
             if 'name' in tree.data.keys():
                 ax.text(*dat, tree.data['name'][node.id], color='black')
 
@@ -55,6 +64,9 @@ def plot_tree_3d_scatter(tree : HypTree, property : str, ax=None, selector=lambd
                         ax.quiver(*dat, *(cdat-dat), length=1.0, arrow_length_ratio=0.1, color=cmap(i/len(tree.levels)))
                     elif len(cdat.shape) == 2:
                         ax.plot(cdat[:,0], cdat[:,1], cdat[:,2], color=cmap(i/len(tree.levels)))
+                    elif len(cdat.shape) == 3:
+                        for j in range(cdat.shape[1]):
+                            ax.plot(cdat[:,j,0], cdat[:,j,1], cdat[:,j,2], color=cmap(i/len(tree.levels)))
 
     handles = [mpatch.Patch(color=cmap(i/len(levels)), label=f'{i+1}') for i in range(len(levels))]
     legend = ax.legend(handles=handles, title="Levels")
