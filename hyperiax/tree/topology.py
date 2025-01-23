@@ -58,7 +58,7 @@ def asymmetric_topology(h: int)  -> TopologyNode:
 
 
 ### Alternative Newick tree generation
-def read_topology(newick_str: str,return_topology=False,precompute_child_gathers=True) -> HypTree:
+def read_topology(newick_str: str, return_topology=False, precompute_child_gathers=True) -> HypTree:
     """ 
     Generate a tree from a Newick string recursively.
 
@@ -67,49 +67,44 @@ def read_topology(newick_str: str,return_topology=False,precompute_child_gathers
     """
     import re
 
-    iter_tokens = re.finditer(r"([^:;,()\s]*)(?:\s*:\s*([\d.]+)\s*)?([,);])|(\S)", newick_str+";")
+    iter_tokens = re.finditer(r"([A-Za-z0-9_-]+)?(?:\s*:\s*([\d.]+))?([,();])", newick_str)
+    edge_lengths = []
 
     def recursive_parse_newick(parent=None):
-        name, length, delim, char = next(iter_tokens).groups(0)
+        name, length, char = next(iter_tokens).groups()
+        node = TopologyNode(name=name if name else "", parent=parent, children=[])
+        if length:
+            edge_lengths.append(length)
 
-        node = TopologyNode(name=name if name else None,             # create a "ghost" subtree root node without data
-                       
-                       parent=parent,
-                       children=[])
-        node.data = {"edge_length": float(length)} if length else {}
-
-        if char == "(": # start a subtree
-
-            while char in "(,": # add all children within a parenthesis to the current node
+        if char == "(":
+            while char in "(,":
                 child, char = recursive_parse_newick(parent=node)
-                node.children.append(child)
+                if child is not None:
+                    node.children.append(child)
+   
+            name, length, char = next(iter_tokens).groups()
+            if length:
+                edge_lengths.append(length)
+        return node, char
 
-            name, length, delim, char = next(iter_tokens).groups(0)
 
-            node.name = name                        # assign data to the "ghost" subtree root node
-            node.data = {"edge_length": float(length)} if length else {}
-            
-        return node, delim
-    
     root, _ = recursive_parse_newick()
-
 
     if return_topology:
         return root
-
     else: 
-        # Add edge lengths 
-        tree = HypTree(root,precompute_child_gathers)
 
-        if 'edge_length' in root.children[0].data.keys():
+        tree = HypTree(root,precompute_child_gathers)
+        if root.children:
             tree.add_property('edge_length', (1,), dtype=float)
 
-            for node in tree.iter_topology_bfs():
-                if node.parent is not None:
-                    tree.data['edge_length'] = tree.data['edge_length'].at[node.id].set(node.data['edge_length'])
-                #del node.data
+            for temp_length,node in zip(edge_lengths,list(reversed(list(tree.iter_topology_dfs())))):
+                tree.data["edge_length"] = tree.data["edge_length"].at[node.id].set(float(temp_length))
+                node.data = {"edge_length": float(temp_length)} if temp_length else {} # Should consider to be removed, but is used for plotting atm.
+
 
         return tree
+
     
 
     
