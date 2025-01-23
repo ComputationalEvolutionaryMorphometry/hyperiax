@@ -26,8 +26,6 @@ def symmetric_topology(height : int, degree : int, fake_root : bool = False) -> 
 
     return _builder(height + 1, degree, None)
 
-
-
 def asymmetric_topology(h: int)  -> TopologyNode:
     """ 
     Generate an asymmetric binary tree of given height.
@@ -55,7 +53,6 @@ def asymmetric_topology(h: int)  -> TopologyNode:
         node = node.children[0]
 
     return root 
-
 
 def read_topology(newick_str: str, return_topology=False, precompute_child_gathers=True) -> HypTree:
     """ 
@@ -104,7 +101,6 @@ def read_topology(newick_str: str, return_topology=False, precompute_child_gathe
 
         return tree
 
-    
 def write_topology(tree:HypTree) -> str:
     """
     Convert a tree to a Newick string representation.
