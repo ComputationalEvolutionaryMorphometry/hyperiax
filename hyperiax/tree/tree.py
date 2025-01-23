@@ -103,10 +103,51 @@ class HypTree:
     def __len__(self) -> int:
         return self.size
 
-    def add_property(self, name, shape, dtype = None, initializer = None, key = None):
+    def add_property(self, name, shape = (), dtype = None, initializer = None, key = None):
         self.data[name] = jnp.empty((self.size, *shape), dtype=dtype)
         self.masks[name] = jnp.zeros((self.size,), dtype=bool)
 
+    def __repr__(self):
+        """
+        Return a string representation of the tree
+        """
+        return f"HypTree(size={self.size}, levels={len(self.levels)}, leaves={jnp.sum(self.is_leaf)}, inner nodes={jnp.sum(self.is_inner)})"
+
+    def __str__(self):
+        return self.__repr__()
+
+
+    ################################
+    # travelsal methods for the tree
+    ################################
+    # dfs
+    def iter_topology_dfs(self) -> Iterator[TopologyNode]:
+        """
+        Iterate over all of the nodes in a depth-first manner.
+
+        """
+        stack = deque([self.topology_root])
+        
+        while stack:
+            current = stack.pop()
+            if current.children:
+                stack.extend(reversed(current.children))
+            yield current
+       
+    def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
+        """
+        Iterate over all of the leaves in the tree, in a depth-first manner.
+        """
+        stack = deque([self.topology_root])
+
+        while stack:
+            current = stack.pop()
+            if current.children:
+                stack.extend(reversed(current.children))
+            else:
+                yield current
+
+    # bfs
     def iter_topology_bfs(self) -> Iterator[TopologyNode]:
         """
         Iterate over all of the nodes in a breadth first manner
@@ -119,17 +160,6 @@ class HypTree:
             if current.children:
                 queue.extend(current.children)
             yield current
-    
-    def __repr__(self):
-        """
-        Return a string representation of the tree
-        """
-        return f"HypTree(size={self.size}, levels={len(self.levels)}, leaves={jnp.sum(self.is_leaf)}, inner nodes={jnp.sum(self.is_inner)})"
-
-    def __str__(self):
-        return self.__repr__()
-
-
     
     def iter_topology_leaves_bfs(self) -> Iterator[TopologyNode]:
         """
@@ -144,77 +174,6 @@ class HypTree:
             else:
                 yield current
     
-    def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
-        """
-        Iterate over all of the leaves in the tree, in a depth-first manner.
-        """
-        stack = deque([self.topology_root])
-
-        while stack:
-            current = stack.pop()
-            if current.children:
-                stack.extend(reversed(current.children))
-            else:
-                yield current
-
-    def iter_topology_levels(self) -> Iterator[List[TopologyNode]]:
-        """
-        Iterate over each level in the tree
-
-        """
-        queue = deque()
-        buffer_queue = deque([self.topology_root])
-        while queue or buffer_queue:
-            if not queue: # if queue is empty, flush the buffer and yield a level
-                queue = buffer_queue
-                yield list(buffer_queue) # to not pass the reference
-                buffer_queue = deque()
-
-            if children := queue.popleft().children:
-                buffer_queue.extend(children)   
-
-    # Extra transversel methods for the tree
-    def iter_topology_dfs(self) -> Iterator[TopologyNode]:
-        """
-        Iterate over all of the nodes in a depth-first manner.
-
-        """
-        stack = deque([self.topology_root])
-
-        while stack:
-            current = stack.pop()
-            if current.children:
-                stack.extend(current.children)
-            yield current
-    
-    def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
-        """
-        Iterate over all of the leaves in the tree, in a depth-first manner.
-
-        """
-
-        queue = deque([self.topology_root])
-
-        while queue:
-            current = queue.popleft()
-            if current.children:
-                queue.extend(current.children)
-            else:
-                yield current
-    
-    def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
-        """
-        Iterates over the leaves in the tree using depth-first search.
-        Note that this is not the same as iter_topology_leaves_dfs, as this method is bfs 
-        """
-        stack = deque([self.topology_root])
-
-        while stack:
-            current = stack.pop()
-            if current.children:
-                stack.extend(reversed(current.children))
-            else:
-                yield current
 
     def iter_topology_levels(self) -> Iterator[List[TopologyNode]]:
         """

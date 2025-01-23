@@ -15,7 +15,7 @@ def inverse_gamma_logpdf(x, alpha, beta):
     return alpha * jnp.log(beta) - gammaln(alpha) - (alpha + 1) * jnp.log(x) - beta / x
 
 class VarianceParameter(Parameter):
-    def __init__(self, value, alpha=3., beta=2., proposal_var=.01, keep_constant=False) -> None:
+    def __init__(self, value, alpha=3., beta=2., proposal_var=.01, keep_constant=False, max=None) -> None:
         """ Initialize a variance parameter
         
         :param value: The initial value of the parameter
@@ -29,6 +29,7 @@ class VarianceParameter(Parameter):
         self.beta = beta
         self.proposal_var = proposal_var
         self.keep_constant = keep_constant
+        self.max = max
 
     def propose(self, key):
         """ Propose a new value for the parameter
@@ -39,7 +40,11 @@ class VarianceParameter(Parameter):
         if self.keep_constant:
             return self
 
-        return VarianceParameter(jnp.exp(jnp.log(self.value)+jnp.sqrt(self.proposal_var)*jax.random.normal(key)), self.alpha, self.beta, self.proposal_var, self.keep_constant)
+        shape = self.value.shape if hasattr(self.value,'shape') else ()
+        new_value = jnp.exp(jnp.log(self.value)+jnp.sqrt(self.proposal_var)*jax.random.normal(key,shape=shape))
+        if self.max is not None:
+            new_value = jnp.clip(new_value, 0, self.max)
+        return VarianceParameter(new_value, self.alpha, self.beta, self.proposal_var, self.keep_constant, self.max)
     
     def update(self, value, accepted): 
         """ Update the parameter with a new value
@@ -48,11 +53,14 @@ class VarianceParameter(Parameter):
         :param accepted: Whether the new value was accepted.
         """
         if accepted:
-            self.value = value
+            if self.max is not None:
+                self.value = jnp.clip(value, 0, self.max)
+            else:
+                self.value = value
     
     def log_prior(self):
         """ Logarithm of the prior probability of the parameter
         
         :return: The logarithm of the prior probability of the parameter
         """
-        return inverse_gamma_logpdf(self.value,self.alpha,self.beta)
+        return inverse_gamma_logpdf(self.value,self.alpha,self.beta).sum()

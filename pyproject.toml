@@ -31,6 +31,8 @@ examples = [
     "jupyter",
     "matplotlib",
     "pandas",
+    "plotly",
+    "trimesh",
 ]
 dev = [
     "black",
