@@ -79,6 +79,8 @@ def read_topology(newick_str: str, return_topology=False, precompute_child_gathe
                     node.children.append(child)
    
             name, length, char = next(iter_tokens).groups()
+            if name:  # Update node name if one exists
+                node.name = name
             if length:
                 edge_lengths.append(length)
         return node, char
