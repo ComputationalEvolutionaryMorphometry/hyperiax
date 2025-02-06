@@ -116,8 +116,10 @@ class HypTree:
     def __str__(self):
         return self.__repr__()
 
-    # travelsal methods for the tree
 
+    ################################
+    # travelsal methods for the tree
+    ################################
     # dfs
     def iter_topology_dfs(self) -> Iterator[TopologyNode]:
         """
@@ -125,16 +127,16 @@ class HypTree:
 
         """
         stack = deque([self.topology_root])
-
+        
         while stack:
             current = stack.pop()
             if current.children:
-                stack.extend(current.children)
+                stack.extend(reversed(current.children))
             yield current
-    
+       
     def iter_topology_leaves_dfs(self) -> Iterator[TopologyNode]:
         """
-        Iterates over the leaves in the tree using depth-first search.
+        Iterate over all of the leaves in the tree, in a depth-first manner.
         """
         stack = deque([self.topology_root])
 
