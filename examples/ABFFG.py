@@ -21,7 +21,7 @@ logU = lambda y,c,F,H: c-.5*quadratic(y,H)+jnp.dot(F,y) # unnormalized Gaussian 
 U = lambda y,c,F,H: jnp.exp(logU(y,c,F,H))
 
 # forward guided sampling, assumes already backward filtered (H,F parameters)
-def forward_guided(x,H_T,F_T,tildea,dts,dWs,b,sigma,params):
+def forward_guided(x0,H_T,F_T,tildea,dts,dWs,b,sigma,params):
     tildebeta = lambda t,params: 0.
     tildeb = lambda t,x,params: tildebeta(t,params) #+jnp.dot(tildeB,x) #tildeB is zero for now
 
@@ -36,25 +36,25 @@ def forward_guided(x,H_T,F_T,tildea,dts,dWs,b,sigma,params):
         dt, dW = val
         H = Ht(t); F = Ft(t)
         tilderx =  F-dot(H,X)
-        _sigma = sigma(x,params)
+        _sigma = sigma(X,params)
         _a = jnp.einsum('ij,kj->ik',_sigma,_sigma)
-        n = _a.shape[0]
+        n = _a.shape[0]; d = X.shape[0]//n # number of landmarks and dimension
         
         # SDE
-        Xtp1 = X + b(t,X, params)*dt + dot(_a,tilderx)*dt + dot(_sigma,dW)
+        Xtp1 = X + b(t,X,params)*dt + dot(_a,tilderx)*dt + dot(_sigma,dW)
         tp1 = t + dt
         
         # logpsi
         amtildea = _a-tildea
-        logpsicur = logpsi+(
+        logpsitp1 = logpsi+(
                 jnp.dot(b(t,X,params)-tildeb(t,X,params),tilderx)
-                -.5*jnp.einsum('ij,ji->',amtildea,H)
+                -.5*d*jnp.einsum('ij,ji->',amtildea,H)
                 +.5*jnp.einsum('ij,jd,id->',
-                           amtildea,tilderx.reshape((n,-1)),tilderx.reshape((n,-1)))
+                           amtildea,tilderx.reshape((n,d)),tilderx.reshape((n,d)))
                     )*dt
-        return((tp1,Xtp1,logpsicur),(t,X,logpsi))    
+        return((tp1,Xtp1,logpsitp1),(t,X,logpsi))    
 
     # sample
-    (T,X,logpsi), (ts,Xs,logpsis) = jax.lax.scan(bridge_SFvdM,(0.,x,0.),(dts,dWs))#,H,F))
+    (T,X,logpsi), (ts,Xs,logpsis) = jax.lax.scan(bridge_SFvdM,(0.,x0,0.),(dts,dWs))#,H,F))
     Xscirc = jnp.vstack((Xs, X))
     return Xscirc,logpsi
