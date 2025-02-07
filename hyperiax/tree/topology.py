@@ -63,6 +63,7 @@ def read_topology(newick_str: str,return_topology=False) -> HypTree:
     :param newick_str: newick string representation
     :return: The constructed tree
     """
+
     def parse_newick(newick_str):
         edge_lengths_collected = []
         k = -1
@@ -105,6 +106,7 @@ def read_topology(newick_str: str,return_topology=False) -> HypTree:
         return root, edge_lengths_collected
 
     root, edge_lengths_collected = parse_newick(newick_str)
+
 
     if return_topology:
         return root
