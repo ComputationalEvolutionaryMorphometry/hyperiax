@@ -54,54 +54,74 @@ def asymmetric_topology(h: int)  -> TopologyNode:
 
     return root 
 
-def read_topology(newick_str: str, return_topology=False, precompute_child_gathers=True) -> HypTree:
+
+### Alternative Newick tree generation
+def read_topology(newick_str: str,return_topology=False) -> HypTree:
     """ 
     Generate a tree from a Newick string recursively.
 
     :param newick_str: newick string representation
     :return: The constructed tree
     """
-    import re
+    def parse_newick(newick_str):
+        edge_lengths_collected = []
+        k = -1
+        root = current_node = TopologyNode(name=None, parent=None, children=[])  # Start with a root node
+        for i, char in enumerate(newick_str):
+            if i < k:
+                continue
+            elif char == '(':
+                # Create a new node and make it a child of the current node
+                new_node = TopologyNode(name=None, parent=current_node, children=[])
+                current_node.children += [new_node]
+                current_node = new_node  # Move down to the new node
 
-    iter_tokens = re.finditer(r"([A-Za-z0-9_-]+)?(?:\s*:\s*([\d.]+))?([,();])", newick_str)
-    edge_lengths = []
+            elif char == ',':
+                # Go up to the parent, and then create a sibling node
+                current_node = current_node.parent
+                new_node = TopologyNode(name=None, parent=current_node, children=[])
+                current_node.children += [new_node]
+                current_node = new_node  # Move to the new sibling node
 
-    def recursive_parse_newick(parent=None):
-        name, length, char = next(iter_tokens).groups()
-        node = TopologyNode(name=name if name else "", parent=parent, children=[])
-        if length:
-            edge_lengths.append(length)
+            elif char == ')':
+                # End of a subtree, move up to the parent node
+                current_node = current_node.parent
+            elif char == ':':
+                # Branch length follows
+                start = i + 1
+                while i + 1 < len(newick_str) and newick_str[i + 1] not in [',', ')', ';', ' ']:
+                    i += 1
+                edge_lengths_collected.append(float(newick_str[start:i + 1]))
+                k = i+1
 
-        if char == "(":
-            while char in "(,":
-                child, char = recursive_parse_newick(parent=node)
-                if child is not None:
-                    node.children.append(child)
-   
-            name, length, char = next(iter_tokens).groups()
-            if name:  # Update node name if one exists
-                node.name = name
-            if length:
-                edge_lengths.append(length)
-        return node, char
+            elif char not in [';', ' ',":"] and newick_str[i-1] not in [':']:
+                # Reading a node name, collect all characters till we hit a control character
+                start = i
+                while i + 1 < len(newick_str) and newick_str[i + 1] not in ['(', ')', ',', ';', ':', ' ']:
+                    i += 1
+                current_node.name = newick_str[start:i + 1]
+                k = i+1
+                
+        return root, edge_lengths_collected
 
-
-    root, _ = recursive_parse_newick()
+    root, edge_lengths_collected = parse_newick(newick_str)
 
     if return_topology:
         return root
-    else: 
 
-        tree = HypTree(root,precompute_child_gathers)
-        if root.children:
+    else:
+        tree = HypTree(root)
+
+        if len(edge_lengths_collected) > 0:
             tree.add_property('edge_length', (1,), dtype=float)
 
-            for temp_length,node in zip(edge_lengths,list(reversed(list(tree.iter_topology_dfs())))):
-                tree.data["edge_length"] = tree.data["edge_length"].at[node.id].set(float(temp_length))
-                node.data = {"edge_length": float(temp_length)} if temp_length else {} # Should consider to be removed, but is used for plotting atm.
-
-
+            # Assign edge lengths to nodes in post transversal order
+            for i, node in enumerate(list(tree.iter_topology_post())[:-1]):
+                tree.data['edge_length'] = tree.data['edge_length'].at[node.id].set(edge_lengths_collected[i])
+     
         return tree
+
+    
 
 def write_topology(tree:HypTree) -> str:
     """
