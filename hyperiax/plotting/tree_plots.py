@@ -100,11 +100,12 @@ def plot_node(self,parent,ax,inc_names):
     """Plot a single node and its children"""
     ax.plot(self.data["x_temp"][parent.id],self.data["y_temp"][parent.id], 'ko')  # Plot the current node
 
-    if inc_names:
+    if inc_names and parent.name is not None:
         ax.text(self.data["x_temp"][parent.id].item(),self.data["y_temp"][parent.id].item(),  parent.name+"  ", fontdict=None,rotation="vertical",va="top",ha="center")
-        1+1
+ 
+
     for child in parent.children:
-        if inc_names:
+        if inc_names and child.name is not None:
             ax.text(self.data["x_temp"][child.id].item(),self.data["y_temp"][child.id].item(), child.name+"  ", fontdict=None,rotation="vertical",va="top",ha="center")
         
         
