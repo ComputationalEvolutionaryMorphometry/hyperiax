@@ -5,6 +5,8 @@ import jax
 from ..models import UpReducer, DownModel, UpModel
 from inspect import getfullargspec
 from functools import partial
+import jax.numpy as jnp
+
 
 class OrderedExecutor(ABC):
     """Abstract for the ordered executor.
@@ -79,35 +81,38 @@ class OrderedExecutor(ABC):
     def _up_inner(self, data, tree, params):
         iterator = zip(
             reversed(tree.levels), # indices for levels
-            #reversed(tree.psizes[:-1]), # indices for grouping calculations
-            reversed(tree.pbuckets_ref) # indices for upwards propagation
+            reversed(tree.pbuckets_ref), # indices for upwards propagation
+            reversed(tree.level_non_leaf_indices) # precomputed non-leaf indices
         )
-        next(iterator)
-        for (level_start, level_end), up_ref in iterator:
+        # Process all levels, using precomputed non-leaf indices
+        for (level_start, level_end), up_ref, non_leaf_indices in iterator:
+            if len(non_leaf_indices) == 0:
+                continue  # Skip if all nodes in this level are leaves
+                
+            # Only gather data for non-leaf nodes
             node_data = {
-                k: data[k][level_start:level_end]
+                k: data[k][non_leaf_indices]
                 for k in self.model.up_current_keys
             }
 
+            # Only gather child data for non-leaf nodes
             child_data = {
-                f'child_{k}': data[k][tree.gather_child_idx[level_start:level_end]]
+                f'child_{k}': data[k][tree.gather_child_idx[non_leaf_indices]]
                 for k in self.model.up_child_keys
             }
-
-            #print("CHILDDD", tree.gather_child_idx[level_start:level_end])
 
             result = self.model.up(
                 **node_data,
                 **child_data, 
-                root_mask=tree.is_root[level_start:level_end], 
-                leaf_mask=tree.is_leaf[level_start:level_end],
+                root_mask=tree.is_root[non_leaf_indices], 
+                leaf_mask=jnp.zeros_like(non_leaf_indices, dtype=bool),  # All nodes we process are non-leaves
                 params = params)
             
+            # Update data only for non-leaf nodes
             for k, val in result.items():
-                data[k] = data[k].at[level_start:level_end].set(val)
+                data[k] = data[k].at[non_leaf_indices].set(val)
 
         return data
-
 
 
     @partial(jax.jit, static_argnames=['tree', 'self']) 
