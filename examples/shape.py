@@ -18,7 +18,7 @@ def k_K1(x,params):
 def k_K2(x,params): 
     """ Laplace K2 kernel"""
     r_ = r(x,params)
-    return params['k_alpha']/2*4*(3+3*r_+r_**2)*jnp.exp(-r_)
+    return params['k_alpha']*4*(3+3*r_+r_**2)*jnp.exp(-r_)
 def k_K3(x,params): 
     """ Laplace K3 kernel"""
     r_ = r(x,params)
