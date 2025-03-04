@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 
-from examples.SDE import dot, solve, forward
+from SDE import dot, solve, forward
 
 # functions for pullback and likelihood ratios, see https://arxiv.org/abs/2010.03509 section 6.1 for details
 quadratic = lambda x,H: jnp.dot(x,jnp.dot(H,x))
