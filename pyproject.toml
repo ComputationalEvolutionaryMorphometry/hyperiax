@@ -42,6 +42,14 @@ dev = [
     "plotly",
     "pytest",
 ]
+doc = [
+    "hyperiax",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-annotation",
+    "nbsphinx",
+    "markupsafe==2.0.1",
+    "ipython"
+]
 
 [project.urls]
 Homepage = "https://github.com/computationalevolutionarymorphometry/hyperiax"
