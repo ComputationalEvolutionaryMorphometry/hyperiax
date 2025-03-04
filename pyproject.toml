@@ -27,7 +27,7 @@ dynamic = ["version"]
 examples = [
     "jaxdifferentialgeometry",
     "notebook",
-    "ipykernel"
+    "ipykernel",
     "matplotlib",
     "pandas",
     "plotly",
@@ -37,7 +37,7 @@ dev = [
     "black",
     "flake8",
     "notebook",
-    "ipykernel"
+    "ipykernel",
     "matplotlib",
     "plotly",
     "pytest",
@@ -48,7 +48,7 @@ doc = [
     "sphinx-autodoc-annotation",
     "nbsphinx",
     "markupsafe==2.0.1",
-    "ipython"
+    "ipython",
 ]
 
 [project.urls]
