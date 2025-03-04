@@ -54,7 +54,6 @@ def asymmetric_topology(h: int)  -> TopologyNode:
 
     return root 
 
-
 ### Alternative Newick tree generation
 def read_topology(newick_str: str,return_topology=False) -> HypTree:
     """ 
@@ -122,8 +121,6 @@ def read_topology(newick_str: str,return_topology=False) -> HypTree:
                 tree.data['edge_length'] = tree.data['edge_length'].at[node.id].set(edge_lengths_collected[i])
      
         return tree
-
-    
 
 def write_topology(tree:HypTree) -> str:
     """
