@@ -17,8 +17,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "cmd2",
-    "HeapDict",
     "jax",
     "jaxlib",
     "tqdm",
@@ -28,7 +26,8 @@ dynamic = ["version"]
 [project.optional-dependencies]
 examples = [
     "jaxdifferentialgeometry",
-    "jupyter",
+    "notebook",
+    "ipykernel"
     "matplotlib",
     "pandas",
     "plotly",
@@ -37,16 +36,11 @@ examples = [
 dev = [
     "black",
     "flake8",
-    "jupyter",
+    "notebook",
+    "ipykernel"
     "matplotlib",
-    "mypy",
+    "plotly",
     "pytest",
-    "sphinx",
-    "sphinx-rtd-theme",
-    "sphinx-autodoc-annotation",
-    "nbsphinx",
-    "markupsafe==2.0.1",
-    "ipython"
 ]
 
 [project.urls]

@@ -11,27 +11,30 @@ on:
 
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   deploy-docs:
-    name: build documentation and deploy to github pages
+    # name: build documentation and deploy to github pages
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      # url: ${{ steps.deployment.outputs.page_url }}
     permissions:
       pages: write
       id-token: write
+      contents: write
+
     steps:
-    - name: set pandoc
+    - uses: actions/checkout@v4
+
+    - name: Install pandoc
       run: sudo apt-get update && sudo apt-get install -y pandoc
 
-    - name: read the repo
-      uses: actions/checkout@v4
-
-    - name: install dependencies
+    - name: Set up python
+      uses: actions/setup-python@v4
+      
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r docs/requirements.txt
@@ -46,7 +49,7 @@ jobs:
     #     github_token: ${{ secrets.GITHUB_TOKEN }}
     #     publish_dir: ./docs/build/html
 
-    - name: deployment
+    - name: Deploy documentation
       uses: sphinx-notes/pages@v3
       with:
         documentation_path: ./docs/source

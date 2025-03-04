@@ -1,12 +1,12 @@
+from jax import numpy as jnp
 
 from hyperiax.models.functional import pass_up, sum_fuse_children
 from hyperiax.tree import TopologyNode, HypTree
-from jax import numpy as jnp
-
 from hyperiax.models.lambdamodels import UpLambdaReducer
 from hyperiax.execution import OrderedExecutor
 from hyperiax.plotting import plot_tree_text
 from hyperiax.models.lambdamodels import UpLambda, UpLambdaReducer
+
 from test_fixtures import noise_tree
 
 
