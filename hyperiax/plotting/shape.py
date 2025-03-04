@@ -5,14 +5,15 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 # 2d
-def plot_shape_2d(q,ax=None):
+def plot_shape_2d(q,color=None,ax=None,label=None):
     d = 2
     if ax is None:
         fig = plt.figure()
         ax = fig.add_subplot(111)
     q = q.reshape((-1,d))
-    ax.plot(q[:,0],q[:,1],'.')
+    ax.plot(q[:,0],q[:,1],'.',color=color,label=label)
     ax.axis('equal')
+    return ax
 
 # 3d
 def plot_shape_3d(points,ax=None):
@@ -28,6 +29,7 @@ def plot_shape_3d(points,ax=None):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
+    return ax
 
 def plot_mesh(mesh,ax=None):
     # Plot the mesh

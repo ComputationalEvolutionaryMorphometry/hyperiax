@@ -41,10 +41,9 @@ def metropolis_hastings(log_target, proposal, data, init, num_samples, burn_in=0
         # Compute acceptance probability
         log_likelihood_proposed = log_target(data,proposed_state)
         alpha = jnp.minimum(1.0, jnp.exp(log_likelihood_proposed-log_likelihood_current+log_correction))
-        #print(alpha,log_likelihood_proposed,log_likelihood_current,proposed_state[0].values(),current_state[0].values())
 
         # Decide whether to accept the proposed state
-        if jax.random.uniform(subkey) < alpha:
+        if jax.random.uniform(subkey)<alpha or (hasattr(proposal,'accept_next_state') and proposal.accept_next_state):
             current_state = proposed_state
             log_likelihood_current = log_likelihood_proposed
             accepted_count += 1  # Increment count if proposal is accepted

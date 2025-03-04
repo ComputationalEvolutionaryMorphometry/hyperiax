@@ -63,6 +63,8 @@ class VarianceParameter(Parameter):
             shape = self.value.shape if hasattr(self.value,'shape') else ()
             noise = jnp.sqrt(self.proposal_var)*jax.random.normal(key,shape=shape)
             new_value = jnp.exp(jnp.log(self.value)+noise)
+            if self.min is not None:
+                new_value = jnp.clip(new_value,self.min,jnp.inf)
             if self.max is not None:
                 new_value = jnp.clip(new_value,0,self.max)
             # Add correction term for log-normal proposal asymmetry

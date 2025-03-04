@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # trace plots for MCMC
-def trace_plots(samples,true_params=None):
+def trace_plots(samples,true_params=None,rewrite_names=None):
     """ Trace plots 
     
     :param samples: A list of ParameterStore objects.
@@ -19,13 +19,14 @@ def trace_plots(samples,true_params=None):
 
     # Plot traces
     for ax, (i, param) in zip(axes.ravel(), enumerate(samples[0].values().keys())):
+        name = param if rewrite_names is None else rewrite_names[param]
         ax.plot(np.array([sample[param].value for sample in samples]))
-        ax.set_title(f"Trace for {param}")
+        ax.set_title(f"Trace for {name}")
         ax.set_xlabel('Iteration')
         # Add mean line
         mean_val = np.mean([sample[param].value for sample in samples])
         ax.axhline(y=mean_val,color='r',linestyle='-')
-        ax.set_ylabel(param)
+        ax.set_ylabel(name)
         ax.grid(True)
         if true_params is not None:
             ax.axhline(y=true_params[param],color='g',linestyle='--')

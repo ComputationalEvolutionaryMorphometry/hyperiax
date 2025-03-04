@@ -100,11 +100,12 @@ def plot_node(self,parent,ax,inc_names):
     """Plot a single node and its children"""
     ax.plot(self.data["x_temp"][parent.id],self.data["y_temp"][parent.id], 'ko')  # Plot the current node
 
-    if inc_names:
+    if inc_names and parent.name is not None and not parent.name.startswith('xx_'):
         ax.text(self.data["x_temp"][parent.id].item(),self.data["y_temp"][parent.id].item(),  parent.name+"  ", fontdict=None,rotation="vertical",va="top",ha="center")
-        1+1
+ 
+
     for child in parent.children:
-        if inc_names:
+        if inc_names and child.name is not None and not child.name.startswith('xx_'):
             ax.text(self.data["x_temp"][child.id].item(),self.data["y_temp"][child.id].item(), child.name+"  ", fontdict=None,rotation="vertical",va="top",ha="center")
         
         
@@ -280,7 +281,7 @@ def draw_box(ax, x, y, dis):
     
 
 
-def plot_node_shape(self, parent, ax, inc_names, dis,property,level):
+def plot_node_shape(self, parent, ax, inc_names, dis, property, level, zorder_traj=1, zorder_box=2):
     from matplotlib import pyplot as plt
 
     x0 = self.data["x_temp"][parent.id]
@@ -296,24 +297,24 @@ def plot_node_shape(self, parent, ax, inc_names, dis,property,level):
         plot_trajectory = len(self.data[property][child.id].shape) > 1
 
         if not plot_trajectory:
-            # Draw horizontal and vertical lines
+            # Draw horizontal and vertical lines with lower zorder
             if len(parent.children) > 1:
                 if x<x0-.5*dis or x>x0+.5*dis:
-                    ax.plot([x,x0-dis if x<x0 else x0+dis], [y0,y0],'k-')
-                ax.plot([x,x],[y0 if x<x0-.5*dis or x>x0+.5*dis else y0-dis,y+dis],'k')      
+                    ax.plot([x,x0-dis if x<x0 else x0+dis], [y0,y0],'k-', zorder=zorder_traj)
+                ax.plot([x,x],[y0 if x<x0-.5*dis or x>x0+.5*dis else y0-dis,y+dis],'k', zorder=zorder_traj)      
             else:
-                ax.plot([x,x],[y0-dis,y+dis],'k')
+                ax.plot([x,x],[y0-dis,y+dis],'k', zorder=zorder_traj)
 
-            # Draw box for shape
-            draw_box(ax, x, y, dis)
-
-            # Plot points
+            # Plot points with lower zorder
             points = scale_points(self.data[property][child.id].reshape((-1,2)),[(x-dis,y-dis),(x+dis,y+dis)])
-            ax.scatter(points[:,0], points[:,1],color='r',marker='.')
+            ax.scatter(points[:,0], points[:,1],color='r',marker='.', zorder=zorder_traj)
             
+            # Draw box with higher zorder
+            draw_box(ax, x, y, dis, zorder=zorder_box)
+
             self.data['temp_plotted_point'] = self.data['temp_plotted_point'].at[child.id].set(points)
         else:
-            # Plot points
+            # Plot trajectory with lower zorder
             points = scale_points(self.data[property][child.id].reshape((-1,2)),[(x-dis,y-dis),(x+dis,y+dis)]).reshape((self.data[property][child.id].shape[0],-1,2))
             if 'temp_plotted_point' in self.data.keys():
                 # linearly interpolate
@@ -324,8 +325,8 @@ def plot_node_shape(self, parent, ax, inc_names, dis,property,level):
                 interpolated_array = np.linspace(parent_last_point-child_first_point, np.zeros_like(child_last_point), num_points)
                 points = points+interpolated_array
             for i in range(points.shape[1]):
-                ax.plot(points[:,i,0], points[:,i,1],color=cmap(level))
-                ax.plot(*points[-1,i], 'ro')
+                ax.plot(points[:,i,0], points[:,i,1],color=cmap(level), zorder=zorder_traj)
+                ax.plot(*points[-1,i], 'r.', zorder=zorder_box)
             self.data['temp_plotted_point'] = self.data['temp_plotted_point'].at[child.id].set(points[-1])
 
         # Include text
