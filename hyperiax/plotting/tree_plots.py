@@ -271,17 +271,17 @@ def scale_points(points, bounding_box, padding=0.1):
     return np.column_stack((scaled_x,scaled_y))
 
 
-def draw_box(ax, x, y, dis):
+def draw_box(ax, x, y, dis, zorder=1):
     #ax.plot([x-dis,x+dis],[y+dis,y+dis], 'k-')  # Upper Horizontal
     #ax.plot([x-dis,x+dis],[y-dis,y-dis], 'k-')  # Lower horizontal
     #ax.plot([x-dis,x-dis],[y-dis,y+dis], 'k-')  # Vertical lines
     #ax.plot([x+dis,x+dis],[y-dis,y+dis], 'k-')  # Vertical lines opposite
     ax.fill([x-dis, x+dis, x+dis, x-dis], 
-            [y-dis, y-dis, y+dis, y+dis], color='white', edgecolor='black')
+            [y-dis, y-dis, y+dis, y+dis], color='white', edgecolor='black', zorder=zorder)
     
 
 
-def plot_node_shape(self, parent, ax, inc_names, dis, property, level, zorder_traj=1, zorder_box=2):
+def plot_node_shape(self, parent, ax, inc_names, dis, property, level, zorder_traj=1, zorder_box=2, zorder_points=3):
     from matplotlib import pyplot as plt
 
     x0 = self.data["x_temp"][parent.id]
@@ -307,7 +307,7 @@ def plot_node_shape(self, parent, ax, inc_names, dis, property, level, zorder_tr
 
             # Plot points with lower zorder
             points = scale_points(self.data[property][child.id].reshape((-1,2)),[(x-dis,y-dis),(x+dis,y+dis)])
-            ax.scatter(points[:,0], points[:,1],color='r',marker='.', zorder=zorder_traj)
+            ax.scatter(points[:,0], points[:,1],color='r',marker='.', zorder=zorder_points)
             
             # Draw box with higher zorder
             draw_box(ax, x, y, dis, zorder=zorder_box)
@@ -326,7 +326,7 @@ def plot_node_shape(self, parent, ax, inc_names, dis, property, level, zorder_tr
                 points = points+interpolated_array
             for i in range(points.shape[1]):
                 ax.plot(points[:,i,0], points[:,i,1],color=cmap(level), zorder=zorder_traj)
-                ax.plot(*points[-1,i], 'r.', zorder=zorder_box)
+                ax.plot(*points[-1,i], 'r.', zorder=zorder_points)
             self.data['temp_plotted_point'] = self.data['temp_plotted_point'].at[child.id].set(points[-1])
 
         # Include text

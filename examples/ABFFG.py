@@ -21,12 +21,15 @@ logU = lambda y,c,F,H: c-.5*quadratic(y,H)+jnp.dot(F,y) # unnormalized Gaussian 
 U = lambda y,c,F,H: jnp.exp(logU(y,c,F,H))
 
 # forward guided sampling, assumes already backward filtered (H,F parameters)
-def forward_guided(x0,H_T,F_T,tildea,dts,dWs,b,sigma,params):
+def forward_guided(x0,H_T,F_T,tildea0,tildeaT,dts,dWs,b,sigma,params):
     tildebeta = lambda t,params: 0.
     tildeb = lambda t,x,params: tildebeta(t,params) #+jnp.dot(tildeB,x) #tildeB is zero for now
+    #tildea = lambda t,T: tildeaT
+    tildea = lambda t,T: tildeaT*(t/T)+tildea0*(1-t/T)
 
-    T = jnp.sum(dts)
-    Phi_inv = lambda t: jnp.eye(H_T.shape[0])+H_T@tildea*(T-t)
+    n = H_T.shape[0]; T = jnp.sum(dts)
+    #Phi_inv = lambda t: jnp.eye(n)+H_T@tildea*(T-t)
+    Phi_inv = lambda t:  jnp.eye(n)+H_T@((-(t**2-T**2)/(2*T))*tildeaT+((T-t)**2/(2*T))*tildea0)
     Ht = lambda t: solve(Phi_inv(t),H_T).reshape(H_T.shape) 
     Ft = lambda t: solve(Phi_inv(t),F_T).reshape(F_T.shape) 
 
@@ -45,7 +48,7 @@ def forward_guided(x0,H_T,F_T,tildea,dts,dWs,b,sigma,params):
         tp1 = t + dt
         
         # logpsi
-        amtildea = _a-tildea
+        amtildea = _a-tildea(t,T)
         logpsitp1 = logpsi+(
                 jnp.dot(b(t,X,params)-tildeb(t,X,params),tilderx)
                 -.5*d*jnp.einsum('ij,ji->',amtildea,H)
