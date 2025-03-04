@@ -77,6 +77,17 @@ class HypTree:
                     if not node.children: children.append(int(base)*[0])
                     else: children.append([c.id for c in node.children])
                 self.gather_child_idx = jnp.array(children) 
+    
+
+                # Precompute non-leaf indices for each level
+                self.level_non_leaf_indices = []
+                for level_start, level_end in self.levels:
+                    level_leaf_mask = self.is_leaf[level_start:level_end]
+                    non_leaf_indices = jnp.where(~level_leaf_mask)[0] + level_start
+                    self.level_non_leaf_indices.append(non_leaf_indices)
+
+
+
             else:
                 raise ValueError("Only trees with the same number of children are supported")
             # 2 unique values implies that the tree has a "nice" structure
@@ -94,6 +105,7 @@ class HypTree:
 
             if children := queue.popleft().children:
                 buffer_queue.extend(children)
+
 
 
     def __len__(self) -> int:
