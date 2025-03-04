@@ -98,7 +98,7 @@ If you are using VScode, it is easy to generate such template automatically usin
 
 - Write tests for new features and bug fixes.
 - Make sure all existing tests pass before submitting changes.
-- Run the test suite locally before submitting your PR: `make test`.
+- Run the test suite locally before submitting your PR: `make test` and `make local-notebook-test`
 
 ### Documentation
 
