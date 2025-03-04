@@ -190,7 +190,17 @@ class HypTree:
 
             if children := queue.popleft().children:
                 buffer_queue.extend(children)   
-
+    def iter_topology_post(self) -> Iterator[TopologyNode]:
+        """
+        Iterate over all nodes in post-order traversal (children before parents),
+        matching the Newick format traversal order.
+        """
+        def post_order(node):
+            for child in node.children:
+                yield from post_order(child)
+            yield node
+                
+        yield from post_order(self.topology_root)
 
 class FastBiTree(HypTree):
     """
