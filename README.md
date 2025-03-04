@@ -21,6 +21,8 @@ pip install git+https://github.com/ComputationalEvolutionaryMorphometry/hyperiax
 git clone git@github.com:ComputationalEvolutionaryMorphometry/hyperiax.git
 # or (if you haven't set up ssh)
 git clone https://github.com/ComputationalEvolutionaryMorphometry/hyperiax.git
+# and go into the directory
+cd hyperiax
 # and then install by
 pip install -e hyperiax[dev]
 # and optionally

@@ -32,13 +32,9 @@ class HypTree:
                 parents.append(node.parent.id)
             #child_counts.append(len(node.children)) 
 
-        
-        
-        
         self.size = nodes
         self.data = {}
         self.masks = {}
-
 
         self.levels = list(self._calculate_levels())
         self.node_depths = jnp.concatenate([i*jnp.ones((lend-lstart, 1), dtype=int) for i,(lstart,lend) in enumerate(self.levels)])

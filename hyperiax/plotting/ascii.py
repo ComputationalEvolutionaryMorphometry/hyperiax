@@ -1,13 +1,12 @@
-from ..tree import HypTree, TopologyNode
+from typing import Any, List, Tuple, Generator
+from hyperiax.tree.tree import HypTree, TopologyNode
 
-def plot_tree_text(tree):
+def plot_tree_text(tree: HypTree):
     formatter = TreeFormatter(tree)
     formatter.print_tree()
 
 
 # Functions for nicer tree printing in the terminal, modified from https://github.com/AharonSambol/PrettyPrintTree
-
-from typing import Any, List, Tuple, Generator
 
 def zip_longest(*iterables: List, default: Any) -> Generator:
     """
@@ -214,14 +213,17 @@ class TreeFormatter:
         return node.children
     
     def get_name(self, node: TopologyNode) -> str:
-        return node.name if 'name' in node.__dict__ else '*'
+        if "name" in node.__dict__ and node.name != None:
+            return node.name
+        else:
+            return 'o'
     
-    # def add_name(self, name: str, node_formatter: TreeNodeFormatter, parent_adder: callable=add_parent, seperator: str = ' ') -> TreeNodeFormatter:
-    #     if name:
-    #         name_formatter = TreeNodeFormatter.from_string(str(name))
-    #         node_formatter = parent_adder(TreeNodeFormatter.from_string(seperator), node_formatter)
-    #         node_formatter = parent_adder(name_formatter, node_formatter)
-    #     return node_formatter
+    def add_name(self, name: str, node_formatter: TreeNodeFormatter, parent_adder: callable=add_parent, seperator: str = ' ') -> TreeNodeFormatter:
+        if name:
+            name_formatter = TreeNodeFormatter.from_string(str(name))
+            node_formatter = parent_adder(TreeNodeFormatter.from_string(seperator), node_formatter)
+            node_formatter = parent_adder(name_formatter, node_formatter)
+        return node_formatter
     
     def format(self) -> str:
         """
@@ -245,7 +247,7 @@ class TreeFormatter:
         Returns:
             TreeNodeFormatter: The root node formatter.
         """
-        # name = self.get_name(node)
+        name = self.get_name(node)
         children = self.get_children(node)
         node_formatter = self.node_to_formatter(node)
 
@@ -261,7 +263,7 @@ class TreeFormatter:
                 children_node_formatter = join_horizontally(children_formatters)
             
             node_formatter = add_parent(node_formatter, children_node_formatter)
-        
+            
         # node_formatter = self.add_name(name, node_formatter)
             
         return node_formatter
