@@ -6,7 +6,7 @@ class UpLambdaReducer(UpReducer):
 
     :param UpModel: Requires an up and fuse function.
     """
-    def __init__(self, up_fn, transform_fn, reductions) -> None:
+    def __init__(self, up_fn, transform_fn, reductions, up_preserves = []) -> None:
         """Lambda model that only contains an up interface
 
         :param up_fn: param intputs from node to transform_fn
@@ -16,7 +16,7 @@ class UpLambdaReducer(UpReducer):
         self.up = up_fn
         self.transform = transform_fn
 
-        super().__init__(reductions=reductions)
+        super().__init__(reductions=reductions, up_preserves=up_preserves)
 
     def up(self, *args, **kwargs):
         """ Up function to define values to fuse function

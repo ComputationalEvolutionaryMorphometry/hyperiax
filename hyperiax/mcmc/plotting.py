@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # trace plots for MCMC
-def trace_plots(samples,true_params=None,rewrite_names=None):
+def trace_plots(samples,true_params=None,rewrite_names=None,y_bottom=0.):
     """ Trace plots 
     
     :param samples: A list of ParameterStore objects.
@@ -24,13 +24,24 @@ def trace_plots(samples,true_params=None,rewrite_names=None):
         ax.set_title(f"Trace for {name}")
         ax.set_xlabel('Iteration')
         # Add mean line
-        mean_val = np.mean([sample[param].value for sample in samples])
-        ax.axhline(y=mean_val,color='r',linestyle='-')
+        values = np.array([sample[param].value for sample in samples])
+        if values.ndim > 1:
+            # For multidimensional values, compute mean for each dimension
+            mean_vals = np.mean(values, axis=0)
+            for i, mean_val in enumerate(mean_vals):
+                ax.axhline(y=mean_val, color='r', linestyle='-', alpha=0.7, label=f'Mean dim {i}' if i==0 else None)
+        else:
+            # For scalar values, just one mean line
+            mean_val = np.mean(values)
+            ax.axhline(y=mean_val, color='r', linestyle='-')
         ax.set_ylabel(name)
         ax.grid(True)
         if true_params is not None:
-            ax.axhline(y=true_params[param],color='g',linestyle='--')
-        ax.set_ylim(bottom=0)
+            # Handle both scalar and array true parameters
+            true_param_values = np.atleast_1d(true_params[param])
+            for i, true_val in enumerate(true_param_values):
+                ax.axhline(y=true_val, color='g', linestyle='--', label=f'True value dim {i}' if i==0 and len(true_param_values)>1 else None)
+        ax.set_ylim(bottom=y_bottom)
 
     # Remove any unused subplots
     for ax in axes.ravel()[num_params:]:

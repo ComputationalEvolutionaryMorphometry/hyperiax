@@ -4,8 +4,8 @@ from inspect import getfullargspec
 from .utils import filter_keywords
 
 class UpReducer(ReducerModel):
-    def __init__(self, reductions) -> None:
-        super().__init__(reductions=reductions)
+    def __init__(self, reductions, up_preserves = []) -> None:
+        super().__init__(reductions=reductions, up_preserves=up_preserves)
 
     @abstractmethod
     def transform(self, **kwargs): ...
