@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # trace plots for MCMC
-def trace_plots(samples,true_params=None,rewrite_names=None,y_bottom=0.):
+def trace_plots(samples,true_params=None,rewrite_names=None,y_bottom=None,burnin=0):
     """ Trace plots 
     
     :param samples: A list of ParameterStore objects.
@@ -24,7 +24,7 @@ def trace_plots(samples,true_params=None,rewrite_names=None,y_bottom=0.):
         ax.set_title(f"Trace for {name}")
         ax.set_xlabel('Iteration')
         # Add mean line
-        values = np.array([sample[param].value for sample in samples])
+        values = np.array([sample[param].value for sample in samples[burnin:]])
         if values.ndim > 1:
             # For multidimensional values, compute mean for each dimension
             mean_vals = np.mean(values, axis=0)
@@ -41,11 +41,11 @@ def trace_plots(samples,true_params=None,rewrite_names=None,y_bottom=0.):
             true_param_values = np.atleast_1d(true_params[param])
             for i, true_val in enumerate(true_param_values):
                 ax.axhline(y=true_val, color='g', linestyle='--', label=f'True value dim {i}' if i==0 and len(true_param_values)>1 else None)
-        ax.set_ylim(bottom=y_bottom)
+        ax.set_ylim(bottom=y_bottom if y_bottom is not None else min(np.min(values),0.))
 
     # Remove any unused subplots
     for ax in axes.ravel()[num_params:]:
         ax.axis('off')
 
     plt.tight_layout()
-    plt.show()
+    return axes

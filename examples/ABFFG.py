@@ -98,67 +98,72 @@ def forward_guided(x0,dts,dWs,b,sigma,params,B=None,beta=None,tildea0=None,tilde
     Xscirc = jnp.vstack((Xs, X))
     return Xscirc,logpsi
 
-def Gaussian_down_unconditional(sigma):
+def Gaussian_down_unconditional(sigma,params_fn=None):
     @jax.jit
-    def down_unconditional(noise,edge_length,parent_value,params,**args):
-        def f(noise,edge_length,parent_value):
+    def down_unconditional(key,noise,edge_length,parent_value,params,**args):
+        def f(key,noise,edge_length,parent_value):
             var = edge_length # variance is edge length
-            return {'value': parent_value+jnp.sqrt(var)*dot(sigma(parent_value,params),noise)}
+            _params = params if params_fn is None else params_fn(key,params)
+            return {'value': parent_value+jnp.sqrt(var)*dot(sigma(parent_value,_params),noise)}
 
-        return jax.vmap(f)(noise,edge_length,parent_value)
+        return jax.vmap(f)(key,noise,edge_length,parent_value)
     downmodel_unconditional = DownLambda(down_fn=down_unconditional)
     return OrderedExecutor(downmodel_unconditional)
 
 # construct down lambda reducers
-def SDE_down_unconditional(n_steps,b,sigma):
+def SDE_down_unconditional(n_steps,b,sigma,params_fn=None):
     # down_unconditional using vmap
     @jax.jit
-    def down_unconditional(noise,edge_length,parent_value,params,**args):
-        def f(noise,edge_length,parent_value):
+    def down_unconditional(key,noise,edge_length,parent_value,params,**args):
+        def f(key,noise,edge_length,parent_value):
+            _params = params if params_fn is None else params_fn(key,params)
             var = edge_length # variance is edge length
             _dts = dts(T=var,n_steps=n_steps); _dWs = jnp.sqrt(_dts)[:,None]*noise
-            Xs = forward(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,params)
+            Xs = forward(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params)
             return {'value': Xs}
 
-        return jax.vmap(f)(noise,edge_length,parent_value)
+        return jax.vmap(f)(key,noise,edge_length,parent_value)
     downmodel_unconditional = DownLambda(down_fn=down_unconditional)
     return OrderedExecutor(downmodel_unconditional)
 
-def SDE_down_conditional(n_steps,b,sigma,a,B=None,beta=None):
+def SDE_down_conditional(n_steps,b,sigma,a,B=None,beta=None,params_fn=None):
     @jax.jit
-    def down_conditional_closed_form(noise,edge_length,v_0,v_T,F_T,H_T,parent_value,params,**args):
-        def f(noise,edge_length,v_0,v_T,F_T,H_T,parent_value):
+    def down_conditional_closed_form(key,noise,edge_length,v_0,v_T,F_T,H_T,parent_value,params,**args):
+        def f(key,noise,edge_length,v_0,v_T,F_T,H_T,parent_value):
+            _params = params if params_fn is None else params_fn(key,params)
             var = edge_length # variance is edge length
             _dts = dts(T=var,n_steps=n_steps)
             _dWs = jnp.sqrt(_dts)[:,None]*noise
-            tildea0 = a(v_0,params); tildeaT = a(v_T,params)
-            Xs,logpsi = forward_guided(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,params,beta=beta,B=B,tildea0=tildea0,tildeaT=tildeaT,F_T=F_T,H_T=H_T)
+            tildea0 = a(v_0,_params); tildeaT = a(v_T,_params)
+            Xs,logpsi = forward_guided(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params,beta=beta,B=B,tildea0=tildea0,tildeaT=tildeaT,F_T=F_T,H_T=H_T)
             return {'value': Xs, 'logpsi': logpsi}
 
-        return jax.vmap(f)(noise,edge_length,v_0,v_T,F_T,H_T,parent_value)
-    def down_conditional(noise,edge_length,v_0,v_T,F_t,H_t,parent_value,params,**args):
-        def f(noise,edge_length,v_0,v_T,F_t,H_t,parent_value):
+        return jax.vmap(f)(key,noise,edge_length,v_0,v_T,F_T,H_T,parent_value)
+    def down_conditional(key,noise,edge_length,v_0,v_T,F_t,H_t,parent_value,params,**args):
+        def f(key,noise,edge_length,v_0,v_T,F_t,H_t,parent_value):
+            _params = params if params_fn is None else params_fn(key,params)
             var = edge_length # variance is edge length
             _dts = dts(T=var,n_steps=n_steps)
             _dWs = jnp.sqrt(_dts)[:,None]*noise
-            tildea0 = a(v_0,params); tildeaT = a(v_T,params)
-            Xs,logpsi = forward_guided(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,params,beta=beta,B=B,tildea0=tildea0,tildeaT=tildeaT,F_t=F_t,H_t=H_t)
+            tildea0 = a(v_0,_params); tildeaT = a(v_T,_params)
+            Xs,logpsi = forward_guided(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params,beta=beta,B=B,tildea0=tildea0,tildeaT=tildeaT,F_t=F_t,H_t=H_t)
             return {'value': Xs, 'logpsi': logpsi}
 
-        return jax.vmap(f)(noise,edge_length,v_0,v_T,F_t,H_t,parent_value)
+        return jax.vmap(f)(key,noise,edge_length,v_0,v_T,F_t,H_t,parent_value)
     if B is None and beta is None:
         downmodel_conditional = DownLambda(down_fn=down_conditional_closed_form)
     else:
         downmodel_conditional = DownLambda(down_fn=down_conditional)
     return OrderedExecutor(downmodel_conditional)
 
-def Gaussian_down_conditional(n,a,d=1):
+def Gaussian_down_conditional(n,a,d=1,params_fn=None):
     @jax.jit
-    def down_conditional(noise,edge_length,c_0,F_0,H_0,F_T,H_T,parent_value,params,**args):
-        def f(noise,edge_length,c_0,F_0,H_0,F_T,H_T,parent_value):
+    def down_conditional(key,noise,edge_length,c_0,F_0,H_0,F_T,H_T,parent_value,params,**args):
+        def f(key,noise,edge_length,c_0,F_0,H_0,F_T,H_T,parent_value):
+            _params = params if params_fn is None else params_fn(key,params)
             x = parent_value
             var = edge_length # variance is edge length
-            covar = var*a(parent_value,params) # covariance matrix
+            covar = var*a(parent_value,_params) # covariance matrix
 
             #invSigma = jnp.linalg.inv(covar)
             Sigma = covar
@@ -189,12 +194,12 @@ def Gaussian_down_conditional(n,a,d=1):
                     (1,1,0,1))(v_T.reshape((n,d)),parent_value.reshape((n,d)),c_0.reshape(d),F_0.reshape((n,d)))),
                 }
 
-        return jax.vmap(f)(noise,edge_length,c_0,F_0,H_0,F_T,H_T,parent_value)
+        return jax.vmap(f)(key,noise,edge_length,c_0,F_0,H_0,F_T,H_T,parent_value)
     downmodel_conditional = DownLambda(down_fn=down_conditional)
     return OrderedExecutor(downmodel_conditional)
 
 #backwards filter
-def backward_filter(dts,params,c_T,v_T,F_T,H_T,B=None,beta=None,tildea0=None,tildeaT=None):
+def backward_filter(dts,params,c_T,v_T,F_T,H_T,B=None,beta=None,tildea0=None,tildeaT=None,params_fn=None):
     # backward filter according to the following ODEs
     # dH(u) = (-B(u)'H(u) - H(u)B(u) + H(u)\tilde a(u)H(u)) du
     # dF(u) = (-B(u)'F(u) + H(u)\tilde a(u)F(u) + H(u)β(u)) du
@@ -225,7 +230,7 @@ def backward_filter(dts,params,c_T,v_T,F_T,H_T,B=None,beta=None,tildea0=None,til
     if B is None and beta is None: # closed form solution
         H_0 = solve(Phi_inv(0),H_T).reshape(H_T.shape)
         F_0 = solve(Phi_inv(0),F_T).reshape(F_T.shape)
-        ## log determinant of Phi_inv(0)
+        # log determinant of Phi_inv(0)
         #log_det_phi_inv = jnp.linalg.slogdet(Phi_inv(0))[1]
         #c_0 = jax.vmap(lambda v_T,c_T: c_T-0.5*v_T.T@(H_T-H_0)@v_T+0.5*log_det_phi_inv,(1,0))(v_T.reshape((n,d)), c_T)
         c_0 = jax.vmap(lambda v_T: logphi_H(jnp.zeros(n),v_T,H_0),1)(v_T.reshape((n,d)))
@@ -290,16 +295,16 @@ def get_init_up(n,tree,d=1,root=None,n_steps=1,B=None,beta=None):
     return init_up
 
 # construct up lambda reducer
-def SDE_up(n_steps,a,B=None,beta=None):
+def SDE_up(n_steps,a,B=None,beta=None,params_fn=None):
     @jax.jit
-    def up(edge_length,v_0,c_T,v_T,F_T,H_T,params,**args):
-        def f(edge_length,v_0,c_T,v_T,F_T,H_T):
+    def up(key,edge_length,v_0,c_T,v_T,F_T,H_T,params,**args):
+        def f(key,edge_length,v_0,c_T,v_T,F_T,H_T):
             var = edge_length # variance is edge length
             T = var # running time of Brownian motion
-
-            return backward_filter(dts(T=T,n_steps=n_steps),params,c_T,v_T,F_T,H_T,B=B,beta=beta,tildea0=a(v_0,params),tildeaT=a(v_T,params))
-        return jax.vmap(f)(edge_length,v_0,c_T,v_T,F_T,H_T)
-    def transform(child_c_0,child_F_0,child_H_0,params,**args):
+            _params = params if params_fn is None else params_fn(key,params)
+            return backward_filter(dts(T=T,n_steps=n_steps),_params,c_T,v_T,F_T,H_T,B=B,beta=beta,tildea0=a(v_0,_params),tildeaT=a(v_T,_params))
+        return jax.vmap(f)(key,edge_length,v_0,c_T,v_T,F_T,H_T)
+    def transform(child_c_0,child_F_0,child_H_0,**args):
         F_T = child_F_0
         H_T = child_H_0
         c_T = child_c_0
@@ -316,16 +321,16 @@ def SDE_up(n_steps,a,B=None,beta=None):
             )
     return OrderedExecutor(upmodel)
 
-def Gaussian_up(n,a,d=1):
+def Gaussian_up(n,a,d=1,params_fn=None):
     @jax.jit
-    def up(noise,edge_length,c_T,F_T,H_T,params,**args):
-        def f(edge_length,c_T,F_T,H_T):
+    def up(key,edge_length,c_T,F_T,H_T,params,**args):
+        def f(key,edge_length,c_T,F_T,H_T):
             var = edge_length # variance is edge length
-
+            _params = params if params_fn is None else params_fn(key,params)
             #Sigma_T = jnp.linalg.inv(H_T) # alt. Q_T
             #v_T = dot(Sigma_T,F_T)
             v_T = solve(H_T,F_T)
-            covar = var*a(v_T,params) # covariance matrix
+            covar = var*a(v_T,_params) # covariance matrix
 
             invPhi_0 = (jnp.eye(n)+H_T@covar)
             #Sigma_0 = Sigma_T@invPhi_0 # = Sigma_T+covar, alt. C_0
@@ -342,7 +347,7 @@ def Gaussian_up(n,a,d=1):
                 (1,0,1))(v_T.reshape((n,d)),c_T.reshape(d),F_T.reshape((n,d)))
 
             return {'c_0': c_0, 'F_0': F_0, 'H_0': H_0}
-        return jax.vmap(f)(edge_length,c_T,F_T,H_T)
+        return jax.vmap(f)(key,edge_length,c_T,F_T,H_T)
     def transform(child_c_0,child_F_0,child_H_0,**args):
         F_T = child_F_0
         H_T = child_H_0
@@ -400,23 +405,31 @@ def get_proposal(tree,obs_var_sample_conditional=False):
         # Use static variable to alternate between parameter and noise updates
         if not hasattr(proposal, 'update_params'):
             proposal.update_params = True
+        if not hasattr(proposal, 'update_obs_var'):
+            proposal.update_obs_var = False
 
         if proposal.update_params:
             if not obs_var_sample_conditional:
                 new_params,log_correction = params.propose(subkeys[1])
             else:
-                # update all parameters except obs_var
-                subkeys = jax.random.split(subkeys[1],len(params.params))
-                proposals_and_corrections = {k: v.propose(rngkey) for rngkey,(k,v) in zip(subkeys,params.params.items()) if k!='obs_var'}
-                new_params = {k: v[0] for k,v in proposals_and_corrections.items()}
-                log_correction = sum(v[1] for v in proposals_and_corrections.values())
-                # obs_var
-                residuals = tree.data['value'][tree.is_leaf][:,-1]-data if tree.data['value'].ndim==3 else tree.data['value'][tree.is_leaf]-data
-                alpha_post = params['obs_var'].alpha+.5*residuals.size # alpha from prior
-                beta_post = params['obs_var'].beta+.5*jnp.sum(residuals**2) # beta from prior
-                new_obs_var = beta_post/jax.random.gamma(subkeys[-1],alpha_post) # inverse gamma sample
-                new_params['obs_var'] = VarianceParameter(**{**params['obs_var'].__dict__,'value':new_obs_var}) if not params['obs_var'].keep_constant else params['obs_var']
+                if not proposal.update_obs_var:
+                    # update all parameters except obs_var
+                    subkeys = jax.random.split(subkeys[1],len(params.params))
+                    proposals_and_corrections = {k: v.propose(rngkey) for rngkey,(k,v) in zip(subkeys,params.params.items()) if k!='obs_var'}
+                    new_params = {k: v[0] for k,v in proposals_and_corrections.items()}
+                    new_params['obs_var'] = params['obs_var']
+                    log_correction = sum(v[1] for v in proposals_and_corrections.values())
+                else:
+                    # obs_var
+                    residuals = tree.data['value'][tree.is_leaf][:,-1]-data if tree.data['value'].ndim==3 else tree.data['value'][tree.is_leaf]-data
+                    alpha_post = params['obs_var'].alpha+.5*residuals.size # alpha from prior
+                    beta_post = params['obs_var'].beta+.5*jnp.sum(residuals**2) # beta from prior
+                    new_obs_var = beta_post/jax.random.gamma(subkeys[-1],alpha_post) # inverse gamma sample
+                    new_params = {k: v for k,v in params.params.items() if k!='obs_var'}
+                    new_params['obs_var'] = VarianceParameter(**{**params['obs_var'].__dict__,'value':new_obs_var}) if not params['obs_var'].keep_constant else params['obs_var']
+                    log_correction = 0.
                 new_params = ParameterStore(new_params)
+                proposal.update_obs_var = not proposal.update_obs_var
             new_state = new_params,(noise,tree.data['v_T'])
         else:
             new_noise = update_CN(noise,subkeys[1])

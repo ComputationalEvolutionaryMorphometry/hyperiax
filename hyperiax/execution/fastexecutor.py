@@ -53,7 +53,8 @@ class OrderedExecutor(ABC):
             node_data = {
                 k: jax.lax.slice_in_dim(data[k], level_start, level_end)
                 for k in self.model.up_keys
-            }
+            } | {'key': jax.numpy.arange(level_start, level_end)}
+
             up_result = self.model.up(**node_data, params = params)
             # save specified values
             for k in self.model.up_preserves:
@@ -89,7 +90,8 @@ class OrderedExecutor(ABC):
             node_data = {
                 k: data[k][level_start:level_end]
                 for k in self.model.up_current_keys
-            }
+            } | {'key': jax.numpy.arange(level_start, level_end)}
+
 
             child_data = {
                 f'child_{k}': data[k][tree.gather_child_idx[level_start:level_end]]
@@ -119,7 +121,7 @@ class OrderedExecutor(ABC):
             node_data = {
                 k: jax.lax.slice_in_dim(data[k], level_start, level_end)
                 for k in self.model.down_child_keys
-            }
+            } | {'key': jax.numpy.arange(level_start, level_end)}
             parent_indices = tree.parents[level_start:level_end] # no need to lax since tree is untraced
             parent_data = {
                 f'parent_{k}': data[k][parent_indices]
