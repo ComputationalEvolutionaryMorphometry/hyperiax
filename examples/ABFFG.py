@@ -231,9 +231,10 @@ def backward_filter(dts,params,c_T,v_T,F_T,H_T,B=None,beta=None,tildea0=None,til
         H_0 = solve(Phi_inv(0),H_T).reshape(H_T.shape)
         F_0 = solve(Phi_inv(0),F_T).reshape(F_T.shape)
         # log determinant of Phi_inv(0)
-        #log_det_phi_inv = jnp.linalg.slogdet(Phi_inv(0))[1]
-        #c_0 = jax.vmap(lambda v_T,c_T: c_T-0.5*v_T.T@(H_T-H_0)@v_T+0.5*log_det_phi_inv,(1,0))(v_T.reshape((n,d)), c_T)
-        c_0 = jax.vmap(lambda v_T: logphi_H(jnp.zeros(n),v_T,H_0),1)(v_T.reshape((n,d)))
+        log_det_phi_inv = jnp.linalg.slogdet(Phi_inv(0))[1]
+        c_0 = jax.vmap(lambda v_T,c_T: c_T+.5*v_T.T@(H_T-H_0)@v_T-.5*log_det_phi_inv,(1,0))(v_T.reshape((n,d)),c_T)
+        #c_0 = jax.vmap(lambda v_T: logphi_H(jnp.zeros(n),v_T,H_0),1)(v_T.reshape((n,d)))
+        #c_0 = jax.vmap(lambda v_T,c_T: c_T-logphi_H(jnp.zeros(n),v_T,H_T)+logphi_H(jnp.zeros(n),v_T,H_0),(1,0))(v_T.reshape((n,d)),c_T)
         return {'c_0': c_0, 'F_0': F_0, 'H_0': H_0}
     else:
         # Define the ODE system
@@ -278,7 +279,7 @@ def backward_filter(dts,params,c_T,v_T,F_T,H_T,B=None,beta=None,tildea0=None,til
 def get_init_up(n,tree,d=1,root=None,n_steps=1,B=None,beta=None):
     tree.add_property('c_0', shape=(d,)); tree.add_property('F_0', shape=(n*d,)); tree.add_property('H_0', shape=(n,n)); tree.add_property('v_0', shape=(n*d,)); tree.add_property('c_T', shape=(d,)); tree.add_property('F_T', shape=(n*d,)); tree.add_property('H_T', shape=(n,n)); tree.add_property('v_T', shape=(n*d,)); tree.add_property('logw'); tree.add_property('logpsi')
     if B is not None or beta is not None:
-        tree.add_property('F_t', shape=(n_steps,n)); tree.add_property('H_t', shape=(n_steps,n,n));
+        tree.add_property('F_t', shape=(n_steps,n*d)); tree.add_property('H_t', shape=(n_steps,n,n));
     if root is not None:
         tree.data['v_0'] = tree.data['v_0'].at[:].set(root); tree.data['v_T'] = tree.data['v_T'].at[:].set(root)
     def init_up(leaf_values,params,v_T=None):
