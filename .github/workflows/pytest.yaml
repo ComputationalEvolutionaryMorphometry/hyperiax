@@ -1,6 +1,9 @@
 name: Pytest on Pull Request
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -21,7 +24,7 @@ jobs:
         
     - name: Install dependencies
       run: |
-        pip install . pytest
+        pip install .[dev]
         
     - name: Run Pytest
       run: make test
