@@ -7,6 +7,7 @@ import time
 from jax.random import split
 
 from examples.SDE import dts, dot, solve, forward
+from jax.scipy.linalg import cholesky
 
 from hyperiax.execution import OrderedExecutor
 from hyperiax.models import UpLambdaReducer, DownLambda, UpLambda
@@ -42,7 +43,7 @@ def add_leaf_noise(tree,key,params):
     tree.data['value'] = tree.data['value'].at[tree.is_leaf].set(leaf_values)
 
 # forward guided sampling, assumes already backward filtered (H,F parameters)
-def forward_guided(x0,dts,dWs,b,sigma,params,B=None,beta=None,tildea0=None,tildeaT=None,F_T=None,H_T=None,F_t=None,H_t=None):
+def forward_guided(x0,dts,dWs,b,sigma,params,a=None,B=None,beta=None,tildea0=None,tildeaT=None,F_T=None,H_T=None,F_t=None,H_t=None):
     # check inputs
     assert(tildeaT is not None)
     assert(F_T is not None or F_t is not None)
@@ -76,8 +77,13 @@ def forward_guided(x0,dts,dWs,b,sigma,params,B=None,beta=None,tildea0=None,tilde
         t = ts[i]
         H = Ht(i); F = Ft(i)
         tilderx =  F-dot(H,X)
-        _sigma = sigma(X,params)
-        _a = jnp.einsum('ij,kj->ik',_sigma,_sigma)
+        if sigma is not None:
+            _sigma = sigma(X,params)
+            _a = jnp.einsum('ij,kj->ik',_sigma,_sigma)
+        else:
+            assert(a is not None)
+            _a = a(X,params)
+            _sigma = cholesky(_a,lower=True,check_finite=False)
         
         # SDE
         Xtp1 = X + b(t,X,params)*dt + dot(_a,tilderx)*dt + dot(_sigma,dW)
@@ -111,7 +117,7 @@ def Gaussian_down_unconditional(sigma,params_fn=None):
     return OrderedExecutor(downmodel_unconditional)
 
 # construct down lambda reducers
-def SDE_down_unconditional(n_steps,b,sigma,params_fn=None):
+def SDE_down_unconditional(n_steps,b,sigma,a=None,params_fn=None):
     # down_unconditional using vmap
     @jax.jit
     def down_unconditional(key,noise,edge_length,parent_value,params,**args):
@@ -119,7 +125,7 @@ def SDE_down_unconditional(n_steps,b,sigma,params_fn=None):
             _params = params if params_fn is None else params_fn(key,params)
             var = edge_length # variance is edge length
             _dts = dts(T=var,n_steps=n_steps); _dWs = jnp.sqrt(_dts)[:,None]*noise
-            Xs = forward(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params)
+            Xs = forward(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params,a=a)
             return {'value': Xs}
 
         return jax.vmap(f)(key,noise,edge_length,parent_value)
@@ -135,7 +141,7 @@ def SDE_down_conditional(n_steps,b,sigma,a,B=None,beta=None,params_fn=None):
             _dts = dts(T=var,n_steps=n_steps)
             _dWs = jnp.sqrt(_dts)[:,None]*noise
             tildea0 = a(v_0,_params); tildeaT = a(v_T,_params)
-            Xs,logpsi = forward_guided(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params,beta=beta,B=B,tildea0=tildea0,tildeaT=tildeaT,F_T=F_T,H_T=H_T)
+            Xs,logpsi = forward_guided(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params,a=a,beta=beta,B=B,tildea0=tildea0,tildeaT=tildeaT,F_T=F_T,H_T=H_T)
             return {'value': Xs, 'logpsi': logpsi}
 
         return jax.vmap(f)(key,noise,edge_length,v_0,v_T,F_T,H_T,parent_value)
@@ -146,7 +152,7 @@ def SDE_down_conditional(n_steps,b,sigma,a,B=None,beta=None,params_fn=None):
             _dts = dts(T=var,n_steps=n_steps)
             _dWs = jnp.sqrt(_dts)[:,None]*noise
             tildea0 = a(v_0,_params); tildeaT = a(v_T,_params)
-            Xs,logpsi = forward_guided(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params,beta=beta,B=B,tildea0=tildea0,tildeaT=tildeaT,F_t=F_t,H_t=H_t)
+            Xs,logpsi = forward_guided(parent_value.reshape((n_steps+1,-1))[-1],_dts,_dWs,b,sigma,_params,a=a,beta=beta,B=B,tildea0=tildea0,tildeaT=tildeaT,F_t=F_t,H_t=H_t)
             return {'value': Xs, 'logpsi': logpsi}
 
         return jax.vmap(f)(key,noise,edge_length,v_0,v_T,F_t,H_t,parent_value)
@@ -185,8 +191,8 @@ def Gaussian_down_conditional(n,a,d=1,params_fn=None):
             inv_covar_Sigma_T = jnp.linalg.solve(jnp.eye(n)+H_T@Sigma_T,H_T) # inv(covar+Sigma_T)
 
             return {
-                #'value': mu+jax.scipy.linalg.solve_triangular(jax.scipy.linalg.cholesky(H,lower=True),noise.reshape((n,d))).flatten(),
-                'value': mu+dot(jax.scipy.linalg.cholesky(invH,lower=True),noise),
+                #'value': mu+jax.scipy.linalg.solve_triangular(cholesky(H,lower=True),noise.reshape((n,d))).flatten(),
+                'value': mu+dot(cholesky(invH,lower=True),noise),
                 #'value': mu+dot(jax.scipy.linalg.sqrtm(invH),noise),
                 'logw': jnp.sum(jax.vmap(
                     #lambda v_T,parent_value,c_0,F_0: logphi(v_T,parent_value,covar+Sigma_T)-logU(parent_value,c_0,F_0,H_0),
