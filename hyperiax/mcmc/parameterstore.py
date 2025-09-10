@@ -41,13 +41,10 @@ class ParameterStore:
         pcount = len(self)
         subkeys = split(key, pcount)
         
-        return ParameterStore({
-            k: v.propose(rngkey)
-            for 
-            rngkey, (k,v)
-            in 
-            zip(subkeys, self.params.items())
-        })
+        proposals_and_corrections = {k: v.propose(rngkey) for rngkey,(k,v) in zip(subkeys,self.params.items())}
+        new_params = {k: v[0] for k,v in proposals_and_corrections.items()}
+        log_correction = sum(v[1] for v in proposals_and_corrections.values())
+        return ParameterStore(new_params),log_correction
 
     def log_prior(self):
         """ Logarithm of the prior probability of the parameters.

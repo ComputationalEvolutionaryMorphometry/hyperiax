@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.special import gammaln
 from scipy.stats import uniform
+import matplotlib.pyplot as plt
 
 def inverse_gamma_logpdf(x, alpha, beta):
     """ Log PDF of the inverse gamma distribution
@@ -27,7 +28,7 @@ def uniform_logpdf(x, a, b):
 
 
 class VarianceParameter(Parameter):
-    def __init__(self, value, alpha=3., beta=2., a=0., b=1., proposal_var=.01, keep_constant=False, max=None, prior='inv_gamma', proposal='log_normal') -> None:
+    def __init__(self, value, alpha=3., beta=2., min=None, max=None, proposal_var=.01, keep_constant=False, prior='inv_gamma', proposal='log_normal') -> None:
         """ Initialize a variance parameter
         
         :param value: The initial value of the parameter
@@ -43,11 +44,10 @@ class VarianceParameter(Parameter):
         super().__init__(value)
         self.alpha = alpha
         self.beta = beta
-        self.a = a
-        self.b = b
+        self.min = min
+        self.max = max
         self.proposal_var = proposal_var
         self.keep_constant = keep_constant
-        self.max = max
         self.prior = prior
         self.proposal = proposal
 
@@ -57,25 +57,32 @@ class VarianceParameter(Parameter):
         '''
 
         if self.keep_constant:
-            return self
+            return self,0.
         
         if self.proposal == 'log_normal':
             shape = self.value.shape if hasattr(self.value,'shape') else ()
-            new_value = jnp.exp(jnp.log(self.value) + jnp.sqrt(self.proposal_var)*jax.random.normal(key,shape=shape))
+            noise = jnp.sqrt(self.proposal_var)*jax.random.normal(key,shape=shape)
+            new_value = jnp.exp(jnp.log(self.value)+noise)
+            if self.min is not None:
+                new_value = jnp.clip(new_value,self.min,jnp.inf)
             if self.max is not None:
-                new_value = jnp.clip(new_value, 0, self.max)
-            return VarianceParameter(value=new_value, alpha=self.alpha, beta=self.beta,a=self.a, b=self.b, proposal_var=self.proposal_var, keep_constant=self.keep_constant, 
-                                     max=self.max, prior=self.prior)
+                new_value = jnp.clip(new_value,0,self.max)
+            # Add correction term for log-normal proposal asymmetry
+            log_correction = -noise  # Since q(x'|x)/q(x|x') = exp(-eps) where eps is the noise
+            return VarianceParameter(**{**self.__dict__,'value':new_value}),log_correction
         
         elif self.proposal == 'mirrored_gaussian':
-            x = self.value + jnp.sqrt(self.proposal_var)*jax.random.normal(key)
-            while x<self.a or x>self.b:
-                if x<self.a:
-                    x = 2*self.a-x
-                elif x>self.b:
-                    x = 2*self.b-x
-            return VarianceParameter(value=x, alpha=self.alpha, beta=self.beta, a= self.a, b=self.b, proposal_var=self.proposal_var, 
-                                    keep_constant=self.keep_constant, max=self.max, prior=self.prior, proposal=self.proposal)
+            shape = self.value.shape if hasattr(self.value,'shape') else ()
+            new_value = self.value + jnp.sqrt(self.proposal_var)*jax.random.normal(key,shape=shape)
+            # Mirror values outside bounds component-wise
+            if self.min is not None:
+                below_min = new_value<self.min
+                new_value = jnp.where(below_min,2*self.min-new_value,new_value)
+            if self.max is not None:
+                above_max = new_value>self.max
+                new_value = jnp.where(above_max,2*self.max-new_value,new_value)
+            log_correction = 0.
+            return VarianceParameter(**{**self.__dict__,'value':new_value}),log_correction
         else:
             raise ValueError(f"Unknown proposal type: {self.proposal}")
 
@@ -101,11 +108,31 @@ class VarianceParameter(Parameter):
         if self.prior == 'inv_gamma':
             return inverse_gamma_logpdf(self.value, self.alpha, self.beta).sum()
         elif self.prior == 'uniform':
-            return uniform_logpdf(self.value, self.a, self.b).sum()
+            return uniform_logpdf(self.value, self.min, self.max).sum()
         else:
             raise ValueError(f"Unknown prior type: {self.prior}")
 
+    def plot_prior(self, x_min=1e-3, x_max=1, n_points=100):
+            """Plot the prior distribution of the parameter
+            
+            :param x_min: Minimum x value to plot
+            :param n_points: Number of points to plot
+            :param x_max: Maximum x value to plot
+            """
+            # Create array of parameter values
+            x = jnp.linspace(x_min,x_max,n_points)
 
+            # Calculate prior for each value
+            prior_vals = [VarianceParameter(**{**self.__dict__,'value':val}).log_prior() for val in x]
 
+            # Plot exp(log_prior)
+            plt.figure()
+            plt.plot(x,jnp.exp(jnp.array(prior_vals)))
+            plt.xlabel('Parameter value')
+            plt.ylabel('Prior density')
+            plt.title('Prior distribution')
 
-
+            # Find x value where prior is maximized
+            max_idx = jnp.argmax(jnp.exp(jnp.array(prior_vals)))
+            max_x = x[max_idx]
+            print(f"Prior is maximized at x = {max_x}")
