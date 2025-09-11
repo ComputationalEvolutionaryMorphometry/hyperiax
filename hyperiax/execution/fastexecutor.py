@@ -55,15 +55,18 @@ class OrderedExecutor(ABC):
             node_data = {
                 k: jax.lax.slice_in_dim(data[k], level_start, level_end)
                 for k in self.model.up_keys
-            }
-            #print(node_data)
+            } | {'key': jax.numpy.arange(level_start, level_end)}
+
             up_result = self.model.up(**node_data, params = params)
+            # save specified values
+            for k in self.model.up_preserves:
+                data[k] = data[k].at[level_start:level_end].set(up_result[k])
 
             segments = tree.pbuckets[level_start:level_end]
 
             fuse_scatter = {
                 f'child_{k}': self.model.reductions[k](v, segments, num_segments=len(up_ref), indices_are_sorted=True)
-                for k,v in up_result.items()
+                for k,v in up_result.items() if k in self.model.reductions
             }
 
             parent_data = {
@@ -93,7 +96,8 @@ class OrderedExecutor(ABC):
             node_data = {
                 k: data[k][non_leaf_indices]
                 for k in self.model.up_current_keys
-            }
+            } | {'key': jax.numpy.arange(level_start, level_end)}
+
 
             # Only gather child data for non-leaf nodes
             child_data = {
@@ -122,7 +126,7 @@ class OrderedExecutor(ABC):
             node_data = {
                 k: jax.lax.slice_in_dim(data[k], level_start, level_end)
                 for k in self.model.down_child_keys
-            }
+            } | {'key': jax.numpy.arange(level_start, level_end)}
             parent_indices = tree.parents[level_start:level_end] # no need to lax since tree is untraced
             parent_data = {
                 f'parent_{k}': data[k][parent_indices]

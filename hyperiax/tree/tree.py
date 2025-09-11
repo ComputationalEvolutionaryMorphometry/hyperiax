@@ -198,6 +198,7 @@ class HypTree:
 
             if children := queue.popleft().children:
                 buffer_queue.extend(children)   
+
     def iter_topology_post(self) -> Iterator[TopologyNode]:
         """
         Iterate over all nodes in post-order traversal (children before parents),

@@ -2,6 +2,7 @@
 
 import jax
 import jax.numpy as jnp
+from jax.scipy.linalg import cholesky
 
 # for 2d + 3d cases with factorizable matrices
 # multiply on the factorized matrix, e.g. covariance matrix
@@ -14,13 +15,17 @@ def dts(T=1.,n_steps=100):
     return jnp.array([T/n_steps]*n_steps)
 
 # Euler-Maruyama SDE integration
-def forward(x,dts,dWs,b,sigma,params):
+def forward(x,dts,dWs,b,sigma,params,a=None):
     def SDE(carry, val):
         t,X = carry
         dt,dW = val
         
         # SDE
-        Xtp1 = X + b(t,X,params)*dt + dot(sigma(x,params),dW)
+        if sigma is not None:
+            Xtp1 = X + b(t,X,params)*dt + dot(sigma(x,params),dW)
+        else:
+            assert(a is not None)
+            Xtp1 = X + b(t,X,params)*dt + dot(cholesky(a(x,params),lower=True,check_finite=False),dW)
         tp1 = t + dt
         
         return((tp1,Xtp1),(t,X))    
