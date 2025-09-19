@@ -1,12 +1,15 @@
+from typing import Callable, Any, Dict
 from .updownmodel import UpReducer, DownModel, UpModel
 from .updatemodel import UpdateReducer, UpdateModel
 
+
 class UpLambdaReducer(UpReducer):
-    """ Lambda model that only contains an up interface
+    """Lambda model that only contains an up interface
 
     :param UpModel: Requires an up and fuse function.
     """
-    def __init__(self, up_fn, transform_fn, reductions, up_preserves = []) -> None:
+
+    def __init__(self, up_fn, transform_fn, reductions, up_preserves=[]) -> None:
         """Lambda model that only contains an up interface
 
         :param up_fn: param intputs from node to transform_fn
@@ -19,43 +22,68 @@ class UpLambdaReducer(UpReducer):
         super().__init__(reductions=reductions, up_preserves=up_preserves)
 
     def up(self, *args, **kwargs):
-        """ Up function to define values to fuse function
+        """Up function to define values to fuse function
         :return: input arguments to fuse function
         """
-        raise ValueError('Model does not have a valid up function')
-    
+        raise ValueError("Model does not have a valid up function")
+
     def transform(self, *args, **kwargs):
-        """ Fuse function to define calculations from up parameters
+        """Fuse function to define calculations from up parameters
         :return: calculated values from up parameters to parent node
         """
-        raise ValueError('Model does not have a valid fuse function')
-    
-class DownLambda(DownModel):
-    """ Lambda model that only contains a down interface
+        raise ValueError("Model does not have a valid fuse function")
 
-    :param DownModel  Requires a down function.
+
+class DownLambda(DownModel):
+    """
+    Lambda model that wraps a function passing downwards along the tree
     """
 
-    def __init__(self, down_fn) -> None:
-        """ Initialize DownLambda model
-
-        :param down_fn: function to define values to fuse function
+    def __init__(self, down_fn: Callable[[Any], Dict]) -> None:
         """
-        self.down = down_fn # need to do this to carry the argspec
-    
+        Initializes the DownLambda model with a user-defined down function.
+        The down_fn must accept keyword arguments whose keys match the property
+        names defined in the tree except the prefix, and return a dictionary of computed values with
+        keys also matching the tree property names.
+
+        Example usage:
+            ```python
+            tree.add_property('value', shape=())
+            tree.add_property('edge_length', shape=())
+
+            @jax.jit # Preferably JIT compile the function for efficiency
+            def down_fn(value, parent_value, edge_length):
+                new_value = value + parent_value * edge_length
+                return {
+                    'value': new_value,
+                }
+
+            down_model = DownLambda(down_fn=down_fn)
+            ```
+
+        Args:
+            down_fn (Callable[[Any], Dict]): A function that takes in the current node's properties and possibly its parent's properties (prefixed with 'parent_'), and returns a dictionary of values to update current node's properties.
+        """
+        self.down = down_fn  # TODO: need to do this to carry the argspec
+
         super().__init__()
 
     def down(self, *args, **kwargs):
-        """ Down function to define values to fuse function
-        :return: input arguments to fuse function
         """
-        raise ValueError('Model does not have a valid down function')
-    
+        Down function to define values to pass down the tree.
+
+        Raises:
+            ValueError: If the model does not have a valid down function.
+        """
+        raise ValueError("Model does not have a valid down function")
+
+
 class UpdateLambdaReducer(UpdateReducer):
     """Lambda model that only contains a local update interface
 
     :param UpdateModel: Requires an update function.
     """
+
     def __init__(self, up_fn, update_fn, reductions) -> None:
         """Lambda model that only contains an up interface
 
@@ -68,23 +96,24 @@ class UpdateLambdaReducer(UpdateReducer):
         super().__init__(reductions=reductions)
 
     def up(self, *args, **kwargs):
-        """ Up function to define values to fuse function
+        """Up function to define values to fuse function
         :return: input arguments to fuse function
         """
-        raise ValueError('Model does not have a valid up function')
-    
+        raise ValueError("Model does not have a valid up function")
+
     def update(self, *args, **kwargs):
-        """ Fuse function to define calculations from up parameters
+        """Fuse function to define calculations from up parameters
         :return: calculated values from up parameters to parent node
         """
-        raise ValueError('Model does not have a valid fuse function')
-    
+        raise ValueError("Model does not have a valid fuse function")
+
 
 class UpdateLambda(UpdateModel):
     """Lambda model that only contains a local update interface
 
     :param UpdateModel: Requires an update function.
     """
+
     def __init__(self, update_fn) -> None:
         """Lambda model that only contains an up interface
 
@@ -93,17 +122,17 @@ class UpdateLambda(UpdateModel):
         self.update = update_fn
 
         super().__init__()
-    
 
     def update(self, *args, **kwargs):
-        """ update function to define calculations from up parameters
+        """update function to define calculations from up parameters
         :return: calculated values from child and parent parameters
         """
-        raise ValueError('Model does not have a valid update function')
-    
+        raise ValueError("Model does not have a valid update function")
+
+
 class UpLambda(UpModel):
-    """Lambda model that only contains an upward interface
-    """
+    """Lambda model that only contains an upward interface"""
+
     def __init__(self, up_fn) -> None:
         """Lambda model that only contains an up interface
 
@@ -112,10 +141,9 @@ class UpLambda(UpModel):
         self.up = up_fn
 
         super().__init__()
-    
 
     def up(self, *args, **kwargs):
-        """ Up function to calculate the upward action on the tree
+        """Up function to calculate the upward action on the tree
         :return: calculated values from child and current values
         """
-        raise ValueError('Model does not have a valid up function')
+        raise ValueError("Model does not have a valid up function")

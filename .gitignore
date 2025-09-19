@@ -179,3 +179,5 @@ examples/example_data
 *.cpp
 .vscode/
 .Rproj.user
+
+GEMINI.md

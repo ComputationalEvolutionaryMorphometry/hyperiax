@@ -32,6 +32,9 @@ examples = [
     "pandas",
     "plotly",
     "trimesh",
+    "flax",
+    "optax",
+    "orbax"
 ]
 dev = [
     "black",
