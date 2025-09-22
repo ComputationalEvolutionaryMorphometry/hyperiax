@@ -2,8 +2,10 @@ from __future__ import annotations
 from typing import Any, Tuple, Iterator, List, Optional
 from collections import deque
 from dataclasses import dataclass, field
+
 from jax import numpy as jnp
 import jax
+from jax.typing import DTypeLike
 
 
 @dataclass
@@ -22,9 +24,13 @@ class TopologyNode:
 
 class HypTree:
     def __init__(
-        self, topology: TopologyNode, precompute_child_gathers: Optional[bool] = False
+        self,
+        topology: TopologyNode,
+        precompute_child_gathers: Optional[bool] = False,
+        dtype: Optional[DTypeLike] = jnp.float32,
     ) -> None:
         self.topology_root = topology
+        self.dtype = dtype
 
         # Indexing nodes in BFS order
         num_nodes = 0
@@ -149,7 +155,7 @@ class HypTree:
         self,
         name: str,
         shape: Optional[Tuple[int, ...]] = (),
-        dtype: Optional[jnp.dtype] = jnp.float32,
+        dtype: Optional[jnp.dtype] = None,
     ):
         """
         Add a property with a given shape to the tree nodes. The added property
@@ -162,6 +168,7 @@ class HypTree:
             dtype (Optional[jnp.dtype], optional): Data type of the property. Defaults to jnp.float32.
         """
         # TODO: Add custom initializers
+        dtype = dtype or self.dtype
         self.data[name] = jnp.empty((self.size, *shape), dtype=dtype)
         self.masks[name] = jnp.zeros((self.size,), dtype=bool)
 
@@ -172,7 +179,10 @@ class HypTree:
         Returns:
             str: String representation of the tree
         """
-        return f"HypTree:\ntotal number of nodes = {self.size}\nnumber of levels = {len(self.levels)}\nnumber of leaves = {jnp.sum(self.is_leaf)}\nnumber of inner nodes = {jnp.sum(self.is_inner)}"
+        from hyperiax.plotting.ascii import TreeFormatter
+
+        formatter = TreeFormatter(self)
+        return f"HypTree:\nTopology:\n{formatter.format()}\nStatistics:\ntotal number of nodes = {self.size}\nnumber of levels = {len(self.levels)}\nnumber of leaves = {jnp.sum(self.is_leaf)}\nnumber of inner nodes = {jnp.sum(self.is_inner)}"
 
     def __str__(self) -> str:
         """

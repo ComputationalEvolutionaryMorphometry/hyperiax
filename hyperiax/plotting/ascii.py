@@ -1,8 +1,9 @@
+from __future__ import annotations
 from typing import Any, List, Tuple, Generator
 from hyperiax.tree.tree import HypTree, TopologyNode
 
 
-def plot_tree_text(tree: HypTree):
+def plot_tree_text(tree: "HypTree"):
     formatter = TreeFormatter(tree)
     formatter.print_tree()
 
