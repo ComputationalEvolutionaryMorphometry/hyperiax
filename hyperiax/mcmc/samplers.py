@@ -363,9 +363,11 @@ class MetropolisHastingsSampler:
                 self.accepted_count += 1
 
             if not show_progress_bar:
-                print(
-                    f"Current k_alpha: {current_state[0]['k_alpha'].value:.3f}, k_sigma: {current_state[0]['k_sigma'].value:.3f}, obs_var: {current_state[0]['obs_var'].value:.3f}, accepted: {accepted}"
+                param_str = ", ".join(
+                    f"{k}: {v.value:.3f}" if hasattr(v, "value") and isinstance(v.value, (int, float, float)) else f"{k}: {v}"
+                    for k, v in current_state[0].items()
                 )
+                print(f"Current params: {param_str}, accepted: {accepted}")
 
             # Save samples after burn-in
             if i >= num_burn_in and (i - num_burn_in) % thinning == 0:
