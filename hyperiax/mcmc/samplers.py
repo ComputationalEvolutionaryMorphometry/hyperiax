@@ -370,7 +370,7 @@ class MetropolisHastingsSampler:
             # Save samples after burn-in
             if i >= num_burn_in and (i - num_burn_in) % thinning == 0:
                 log_liki_history.append(log_likelihood(data, current_state))
-                sample_history.append(current_state[0])
+                sample_history.append(current_state)
 
         # Print acceptance rates
         self._print_acceptance_rates(num_samples + num_burn_in)
