@@ -384,17 +384,17 @@ class MetropolisHastingsSampler:
 
 
 # TODO: Some factory functions for easy migration from old API, might be removed later
-# def create_mh_sampler(tree: HypTree, eta: float = 0.9) -> MetropolisHastingsSampler:
-#     """Create MH sampler equivalent to obs_var_sample_conditional=False."""
-#     param_sampler = MetropolisHastingsParameterSampler()
-#     noise_sampler = PCNNoiseSampler(eta)
-#     proposal_sampler = AlternatingProposalSampler(tree, param_sampler, noise_sampler)
-#     return MetropolisHastingsSampler(proposal_sampler)
+def create_mh_sampler(tree: HypTree, eta: float = 0.9) -> MetropolisHastingsSampler:
+    """Create MH sampler equivalent to obs_var_sample_conditional=False."""
+    param_sampler = MHParametersSampler(tree)
+    noise_sampler = PCNNoiseSampler(eta)
+    proposal_sampler = AlternatingStateSampler(tree, param_sampler, noise_sampler)
+    return MetropolisHastingsSampler(proposal_sampler)
 
 
-# def create_gibbs_sampler(tree: HypTree, eta: float = 0.9) -> MetropolisHastingsSampler:
-#     """Create Gibbs sampler equivalent to obs_var_sample_conditional=True."""
-#     param_sampler = GibbsParameterSampler(tree)
-#     noise_sampler = PCNNoiseSampler(eta)
-#     proposal_sampler = AlternatingProposalSampler(tree, param_sampler, noise_sampler)
-#     return MetropolisHastingsSampler(proposal_sampler)
+def create_gibbs_sampler(tree: HypTree, eta: float = 0.9) -> MetropolisHastingsSampler:
+    """Create Gibbs sampler equivalent to obs_var_sample_conditional=True."""
+    param_sampler = GibbsParametersSampler(tree)
+    noise_sampler = PCNNoiseSampler(eta)
+    proposal_sampler = AlternatingStateSampler(tree, param_sampler, noise_sampler)
+    return MetropolisHastingsSampler(proposal_sampler)
