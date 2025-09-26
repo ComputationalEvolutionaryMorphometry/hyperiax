@@ -96,7 +96,7 @@ class TreeNodeFormatter:
         lines: List[str],
         *,
         height: int,
-        width=int,
+        width: int,
         middle_height: int = None,
         middle_width: int = None,
     ) -> None:
