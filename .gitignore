@@ -180,4 +180,4 @@ examples/example_data
 .vscode/
 .Rproj.user
 
-GEMINI.md
+.DS_Store

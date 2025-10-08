@@ -51,7 +51,7 @@ class HypTree:
         self.levels = list(self._calculate_levels())
         self.node_depths = jnp.concatenate(
             [
-                i * jnp.ones((lend - lstart, 1), dtype=int)
+                i * jnp.ones((lend - lstart,), dtype=int)
                 for i, (lstart, lend) in enumerate(self.levels)
             ]
         )
