@@ -52,10 +52,12 @@ class DownModel(BaseModel):
         into three types:
         1) arguments prefixed with 'current_' correspond to data from the current node,
         2) arguments prefixed with 'child_' correspond to data from the child nodes to be distributed,
-        3) 'params_dict' corresponds to the parameters dictionary of the tree if applicable.
+        3) arguments without prefixes (e.g., 'params_dict') correspond to global data such as
+           the parameters dictionary of the tree if applicable.
 
         Args:
-            **kwargs: Keyword arguments representing data from the current and one of its children.
+            **kwargs: Keyword arguments representing data from the current and one of its children,
+                      identified by 'current_' and 'child_' prefixes, together with any global data.
 
         Returns:
             A dictionary of computed values to be updated in the current node's children.
@@ -68,8 +70,7 @@ class DownModel(BaseModel):
         it requires from parent nodes and from the current node. This allows the executor
         to provide the correct data during the pass.
         """
-        arg_spec = getfullargspec(self.down)
-        arg_keys = filter_keywords(arg_spec.args + arg_spec.kwonlyargs)
+        arg_keys = filter_keywords(getfullargspec(self.down).args)
 
         current_keys = [
             k.removeprefix("current_") for k in arg_keys if k.startswith("current_")
@@ -102,10 +103,12 @@ class UpModel(BaseModel):
         the executor, which shall be categorized into three types:
         1) arguments prefixed with 'current_' correspond to data from the current node,
         2) arguments prefixed with 'parent_' correspond to data from the parent node to be merged,
-        3) 'params_dict' corresponds to the parameters dictionary of the tree if applicable.
+        3) arguments without prefixes (e.g., 'params_dict') correspond to global data such as
+           the parameters dictionary of the tree if applicable.
 
         Args:
-            **kwargs: Keyword arguments representing data from a current and its parent node.
+            **kwargs: Keyword arguments representing data from a current and its parent node,
+                      identified by 'current_' and 'parent_' prefixes, together with any global data.
 
         Returns:
             A dictionary of computed values to be passed up to the parent node.
@@ -117,8 +120,7 @@ class UpModel(BaseModel):
         Inspects the 'up' method's signature to determine which keys it requires
         from child nodes and the current node.
         """
-        arg_spec = getfullargspec(self.up)
-        arg_keys = filter_keywords(arg_spec.args + arg_spec.kwonlyargs)
+        arg_keys = filter_keywords(getfullargspec(self.up).args)
 
         current_keys = [
             k.removeprefix("current_") for k in arg_keys if k.startswith("current_")
@@ -148,11 +150,13 @@ class UpdateModel(BaseModel):
         1) arguments prefixed with 'parent_' correspond to data from the parent node,
         2) arguments prefixed with 'child_' correspond to data from a child node,
         3) arguments prefixed with 'current_' correspond to data from the current node,
-        4) 'params_dict' corresponds to the parameters dictionary of the tree if applicable.
+        4) arguments without prefixes (e.g., 'params_dict') correspond to global data such as
+           the parameters dictionary of the tree if applicable.
 
         Args:
             **kwargs: Keyword arguments representing data from parent, child,
-                      and current nodes, identified by 'parent_' and 'child_' prefixes.
+                      and current nodes, identified by 'parent_', 'child_', and 'current_' prefixes,
+                      together with any global data.
 
         Returns:
             A dictionary of computed values to be updated in the current node.
@@ -164,8 +168,7 @@ class UpdateModel(BaseModel):
         Inspects the 'update' method's signature to determine which keys it requires
         from parent, child, and current nodes.
         """
-        arg_spec = getfullargspec(self.update)
-        arg_keys = filter_keywords(arg_spec.args + arg_spec.kwonlyargs)
+        arg_keys = filter_keywords(getfullargspec(self.update).args)
 
         current_keys = [
             k.removeprefix("current_") for k in arg_keys if k.startswith("current_")
@@ -226,11 +229,13 @@ class UpdateReducer(ReducerModel):
         1) arguments prefixed with 'parent_' correspond to data from the parent node,
         2) arguments prefixed with 'child_' correspond to reduced data from child nodes,
         3) arguments prefixed with 'current_' correspond to data from the current node,
-        4) 'params_dict' corresponds to the parameters dictionary of the tree if applicable.
+        4) arguments without prefixes (e.g., 'params_dict') correspond to global data such as
+           the parameters dictionary of the tree if applicable.
 
         Args:
             **kwargs: Keyword arguments representing data from parent, current, and
-                      reduced child data.
+                      reduced child data, identified by 'parent_', 'current_', and 'child_' prefixes,
+                      together with any global data.
 
         Returns:
             A dictionary of computed values to be updated in the current node.
@@ -244,10 +249,12 @@ class UpdateReducer(ReducerModel):
         are dynamically supplied by the executor and categorized as follows:
         1) arguments prefixed with 'current_' correspond to data from the current node,
         2) arguments prefixed with 'child_' correspond to data from a child node,
-        3) 'params_dict' corresponds to the parameters dictionary of the tree if applicable.
+        3) arguments without prefixes (e.g., 'params_dict') correspond to global data such as
+           the parameters dictionary of the tree if applicable.
 
         Args:
-            **kwargs: Keyword arguments representing data from the current node.
+            **kwargs: Keyword arguments representing data from the current node,
+                      identified by the 'current_' prefix, together with any global data.
 
         Returns:
             A dictionary of values to be reduced among siblings.
@@ -258,8 +265,7 @@ class UpdateReducer(ReducerModel):
         """
         Inspects 'up' and 'update' method signatures to determine required keys.
         """
-        up_arg_spec = getfullargspec(self.up)
-        up_arg_keys = filter_keywords(up_arg_spec.args + up_arg_spec.kwonlyargs)
+        up_arg_keys = filter_keywords(getfullargspec(self.up).args)
 
         up_current_keys = [
             k.removeprefix("current_") for k in up_arg_keys if k.startswith("current_")
@@ -270,10 +276,7 @@ class UpdateReducer(ReducerModel):
         self.up_parent_keys = up_parent_keys
         self.up_current_keys = up_current_keys
 
-        update_arg_spec = getfullargspec(self.update)
-        update_arg_keys = filter_keywords(
-            update_arg_spec.args + update_arg_spec.kwonlyargs
-        )
+        update_arg_keys = filter_keywords(getfullargspec(self.update).args)
 
         update_parent_keys = [
             k.removeprefix("parent_")
@@ -312,7 +315,8 @@ class UpReducer(ReducerModel):
         **kwargs are dynamically supplied by the executor and categorized as follows:
         1) arguments prefixed with 'current_' correspond to data from the current node,
         2) arguments prefixed with 'parent_' correspond to data from the parent node to be merged,
-        3) 'params_dict' corresponds to the parameters dictionary of the tree if applicable.
+        3) arguments without prefixes (e.g., 'params_dict') correspond to global data such as
+           the parameters dictionary of the tree if applicable.
 
         Args:
             **kwargs: Keyword arguments representing data from the current node and
@@ -330,7 +334,8 @@ class UpReducer(ReducerModel):
         **kwargs are dynamically supplied by the executor and categorized as follows:
         1) arguments prefixed with 'current_' correspond to data from the current node,
         2) arguments prefixed with 'parent_' correspond to data from the parent node to be merged,
-        3) 'params_dict' corresponds to the parameters dictionary of the tree if applicable.
+        3) arguments without prefixes (e.g., 'params_dict') correspond to global data such as
+           the parameters dictionary of the tree if applicable.
 
         Args:
             **kwargs: Keyword arguments representing data from the current node.
@@ -344,17 +349,13 @@ class UpReducer(ReducerModel):
         """
         Inspects 'up' and 'transform' method signatures to determine required keys.
         """
-        up_arg_spec = getfullargspec(self.up)
-        up_keys = filter_keywords(up_arg_spec.args + up_arg_spec.kwonlyargs)
+        up_arg_keys = filter_keywords(getfullargspec(self.up).args)
         up_current_keys = [
-            k.removeprefix("current_") for k in up_keys if k.startswith("current_")
+            k.removeprefix("current_") for k in up_arg_keys if k.startswith("current_")
         ]
         self.up_current_keys = up_current_keys
 
-        transform_arg_spec = getfullargspec(self.transform)
-        transform_arg_keys = filter_keywords(
-            transform_arg_spec.args + transform_arg_spec.kwonlyargs
-        )
+        transform_arg_keys = filter_keywords(getfullargspec(self.transform).args)
 
         transform_parent_keys = [
             k.removeprefix("parent_")

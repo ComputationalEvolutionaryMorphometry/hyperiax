@@ -46,6 +46,6 @@ def filter_keywords(keys: List[str]) -> List[str]:
     Returns:
         A new list containing only the strings that are not reserved keywords.
     """
-    reserved_keywords = ["self", "params", "key", "root_mask", "leaf_mask"]
+    reserved_keywords = ["self", "root_mask", "leaf_mask"]
 
     return [k for k in keys if k not in reserved_keywords]
