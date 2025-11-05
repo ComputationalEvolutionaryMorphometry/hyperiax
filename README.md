@@ -24,9 +24,9 @@ git clone https://github.com/ComputationalEvolutionaryMorphometry/hyperiax.git
 # and go into the directory
 cd hyperiax
 # and then install by
-pip install -e hyperiax[dev]
+pip install -e ".[dev]"
 # and optionally
-pip install -e hyperiax[examples]
+pip install -e ".[examples]"
 # to install the dependencies for all the example notebooks
 ```
 
