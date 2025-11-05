@@ -26,27 +26,20 @@ dynamic = ["version"]
 [project.optional-dependencies]
 examples = [
     "jaxdifferentialgeometry",
-    "notebook",
     "ipykernel",
+    "jupyter",
     "matplotlib",
+    "nbclient",
+    "nbconvert",
     "pandas",
     "plotly",
-    "trimesh",
-    "flax",
-    "optax",
-    "orbax"
 ]
 dev = [
     "black",
     "flake8",
-    "notebook",
-    "ipykernel",
-    "matplotlib",
-    "plotly",
     "pytest",
 ]
 doc = [
-    "hyperiax",
     "sphinx-rtd-theme",
     "sphinx-autodoc-annotation",
     "nbsphinx",
@@ -67,3 +60,31 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 version_file = "hyperiax/_version.py"
+
+[tool.setuptools.packages.find]
+where = ["hyperiax"]
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+include = "\.pyi?$"
+extend-exclude = [
+    "/docs/source/generated",
+    "/docs/_build",
+    "/legacy",
+]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+    "E203",
+    "W503",
+]
+exclude = [
+    "docs/_build",
+    "docs/source/generated",
+    "build",
+    "dist",
+    "legacy",
+    "__pycache__",
+]
