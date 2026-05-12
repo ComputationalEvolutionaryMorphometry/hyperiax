@@ -26,6 +26,8 @@ FORBIDDEN_IMPORTS = (
     "flax",
     "trimesh",
     "plotly",
+    "diffrax",
+    "equinox",
 )
 
 

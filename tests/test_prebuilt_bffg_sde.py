@@ -309,9 +309,10 @@ def test_backward_filter_ode_with_zero_drift_matches_closed_form():
         tildea0=tildea, tildeaT=tildea, B=_B_zero, beta=_beta_zero,
     )
 
-    assert jnp.allclose(cf["H_0"], ode["H_0"], atol=1e-4)
-    assert jnp.allclose(cf["F_0"], ode["F_0"], atol=1e-4)
-    assert jnp.allclose(cf["c_0"], ode["c_0"], atol=1e-4)
+    # diffrax Tsit5 + PI controller (rtol=1e-7, atol=1e-9) is at least 1e-6 accurate.
+    assert jnp.allclose(cf["H_0"], ode["H_0"], atol=1e-6)
+    assert jnp.allclose(cf["F_0"], ode["F_0"], atol=1e-6)
+    assert jnp.allclose(cf["c_0"], ode["c_0"], atol=1e-5)
     # ODE path additionally returns per-step series.
     assert ode["F_t"].shape == (n_steps, 1)
     assert ode["H_t"].shape == (n_steps, 1, 1)
@@ -335,8 +336,8 @@ def test_backward_filter_ode_returns_correct_endpoints():
         B=_B_zero, beta=_beta_zero,
     )
     # At t = T, H_t equals H_T (the initial condition of the backward sweep).
-    assert jnp.allclose(ode["H_t"][-1], H_T, atol=1e-4)
-    assert jnp.allclose(ode["F_t"][-1], F_T, atol=1e-4)
+    assert jnp.allclose(ode["H_t"][-1], H_T, atol=1e-6)
+    assert jnp.allclose(ode["F_t"][-1], F_T, atol=1e-6)
 
 
 def test_forward_guided_ode_with_zero_drift_matches_closed_form():
@@ -367,8 +368,8 @@ def test_forward_guided_ode_with_zero_drift_matches_closed_form():
         tildea0=tildea, tildeaT=tildea,
         B=_B_zero, beta=_beta_zero,
     )
-    assert jnp.allclose(Xs_cf, Xs_ode, atol=1e-3)
-    assert jnp.allclose(lp_cf, lp_ode, atol=1e-3)
+    assert jnp.allclose(Xs_cf, Xs_ode, atol=1e-5)
+    assert jnp.allclose(lp_cf, lp_ode, atol=1e-5)
 
 
 def test_sde_up_ode_with_zero_drift_matches_closed_form_sweep():
@@ -380,9 +381,9 @@ def test_sde_up_ode_with_zero_drift_matches_closed_form_sweep():
     ode_out = sde_up(
         n_steps=N_STEPS, a=_identity, B=_B_zero, beta=_beta_zero,
     )(sde_tree)
-    assert jnp.allclose(cf_out["F_T"], ode_out["F_T"], atol=1e-3)
-    assert jnp.allclose(cf_out["H_T"], ode_out["H_T"], atol=1e-3)
-    assert jnp.allclose(cf_out["v_T"], ode_out["v_T"], atol=1e-3)
+    assert jnp.allclose(cf_out["F_T"], ode_out["F_T"], atol=1e-5)
+    assert jnp.allclose(cf_out["H_T"], ode_out["H_T"], atol=1e-5)
+    assert jnp.allclose(cf_out["v_T"], ode_out["v_T"], atol=1e-5)
 
 
 def test_sde_full_pipeline_with_nontrivial_damping_runs():
@@ -411,11 +412,38 @@ def test_sde_full_pipeline_with_nontrivial_damping_runs():
     assert abs(float(out["value"][2, -1, 0]) - (-1.0)) < 0.1
 
 
+def test_backward_filter_ode_without_diffrax_gives_clean_error(monkeypatch):
+    """If the ``[prebuilt-bffg]`` extra isn't installed, the ODE path must
+    raise an ImportError that points the user at the right extra."""
+    import builtins
+    import sys
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "diffrax":
+            raise ImportError("simulated missing diffrax")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.delitem(sys.modules, "diffrax", raising=False)
+
+    from hyperiax.prebuilt.bffg_sde import _backward_filter_ode
+
+    with pytest.raises(ImportError, match="prebuilt-bffg"):
+        _backward_filter_ode(
+            dts(T=1.0, n_steps=4), {},
+            jnp.zeros(1), jnp.zeros(1), jnp.zeros(1), jnp.eye(1),
+            jnp.eye(1), jnp.eye(1),
+            _B_zero, _beta_zero,
+        )
+
+
 def test_sde_up_ode_under_outer_jit():
     edge_lengths = [0.0, 1.0, 2.0]
     sde_tree, _ = _make_sde_tree(edge_lengths, [[1.0], [2.0]], obs_var=0.1)
     sweep = sde_up(n_steps=N_STEPS, a=_identity, B=_B_zero, beta=_beta_zero)
     eager = sweep(sde_tree)
     jitted = jax.jit(sweep)(sde_tree)
-    assert jnp.allclose(eager["F_T"], jitted["F_T"], atol=1e-4)
-    assert jnp.allclose(eager["H_T"], jitted["H_T"], atol=1e-4)
+    assert jnp.allclose(eager["F_T"], jitted["F_T"], atol=1e-6)
+    assert jnp.allclose(eager["H_T"], jitted["H_T"], atol=1e-6)

@@ -32,7 +32,8 @@ uv sync --group dev
 # Or include optional extras:
 #   - io:             ete3-backed Newick I/O
 #   - prebuilt-shape: trimesh utilities for the LDDMM / shape prebuilts
-uv sync --group dev --extra io --extra prebuilt-shape
+#   - prebuilt-bffg:  diffrax-backed ODE path for the SDE BFFG filter
+uv sync --group dev --extra io --extra prebuilt-shape --extra prebuilt-bffg
 
 # Run tests
 uv run pytest

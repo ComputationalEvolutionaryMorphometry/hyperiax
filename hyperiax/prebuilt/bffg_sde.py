@@ -17,8 +17,11 @@ variants:
 - **ODE-integrated** (``B``, ``β`` callables provided): the auxiliary
   linear drift ``tildeb(t, x) = β(t) + B(t)·x`` makes ``Φ_inv`` non-
   analytic, so ``(H, F, c)`` are integrated via
-  :func:`jax.experimental.ode.odeint`. Assumes uniform time stepping
-  (as produced by :func:`hyperiax.prebuilt.sde.dts`).
+  :func:`diffrax.diffeqsolve` (5th-order Tsitouras with adaptive PI
+  step-size control). Requires the optional ``[prebuilt-bffg]`` extra.
+  ``dts.shape[0]`` controls the number of save points returned for
+  ``H_t``/``F_t`` use by :func:`forward_guided`, *not* the integrator's
+  internal step count.
 
 References
 ----------
@@ -129,12 +132,23 @@ def _backward_filter_ode(dts, params, c_T, v_T, F_T, H_T, tildea0, tildeaT, B, b
     """ODE-integrated path for general linear ``B(t)``, ``β(t)``.
 
     Integrates ``(H, F, c)`` with τ = T - t (so τ ∈ [0, T] runs from
-    the edge's lower end to its upper end). Returns ``H_t``, ``F_t``
+    the edge's lower end to its upper end) via
+    :func:`diffrax.diffeqsolve` with an adaptive PI step-size controller
+    on the Tsit5 (5th-order Tsitouras) solver. Returns ``H_t``, ``F_t``
     indexed by *step number* (``0..n_steps-1``), with ``H_t[i]`` /
     ``F_t[i]`` at the END of step ``i`` — matching :func:`forward_guided`'s
     expectations.
+
+    diffrax is an optional dependency (extra ``[prebuilt-bffg]``); the
+    closed-form path doesn't need it.
     """
-    from jax.experimental.ode import odeint
+    try:
+        import diffrax
+    except ImportError as e:
+        raise ImportError(
+            "ODE-integrated backward_filter requires diffrax. Install via "
+            "`uv sync --extra prebuilt-bffg` or `pip install 'hyperiax[prebuilt-bffg]'`."
+        ) from e
 
     n = tildeaT.shape[0]
     d = v_T.size // n
@@ -150,16 +164,15 @@ def _backward_filter_ode(dts, params, c_T, v_T, F_T, H_T, tildea0, tildeaT, B, b
     def tildea(t):
         return tildeaT * (t / T) + tildea0 * (1 - t / T)
 
-    def ode_system(y, tau, params_):
+    def vector_field(tau, y, args):
         # Recover (H, F, c) from the packed state.
         Ht = y[:nn].reshape((n, n))
         Ft_flat = y[nn:nn + nd]
-        ct = y[nn + nd:]
         Ft_mat = Ft_flat.reshape((n, d))
 
         t = T - tau
-        Bt = B(t, params_) if B is not None else jnp.zeros((n, n))
-        betat = beta(t, params_) if beta is not None else jnp.zeros(n)
+        Bt = B(t, args) if B is not None else jnp.zeros((n, n))
+        betat = beta(t, args) if beta is not None else jnp.zeros(n)
         ta = tildea(t)
 
         # Forward-in-t derivatives (van der Meulen et al. eqns).
@@ -170,15 +183,25 @@ def _backward_filter_ode(dts, params, c_T, v_T, F_T, H_T, tildea0, tildeaT, B, b
             + 0.5 * jnp.einsum("id,ij,jd->d", Ft_mat, ta, Ft_mat)
             - 0.5 * jnp.trace(Ht @ ta) * jnp.ones(d)
         )
-
-        # odeint integrates dy/dτ = f(y, τ); we want τ = T - t, so dy/dτ = -dy/dt.
+        # diffrax integrates dy/dτ; we want τ = T - t so dy/dτ = -dy/dt.
         return -jnp.concatenate([dH.flatten(), dF_mat.flatten(), dc])
 
     y0 = jnp.concatenate([H_T.flatten(), F_T, c_T])
-    # Uniform time stepping assumption: ts span [0, T] at n_steps+1 points.
+    # Save points: uniform grid spanning [0, T] in τ-time (n_steps+1 points).
     ts_tau = jnp.linspace(0.0, T, n_steps + 1)
-    solution = odeint(ode_system, y0, ts_tau, params)
-    # solution[k] = y at τ = ts_tau[k] = state at t = T - ts_tau[k].
+
+    sol = diffrax.diffeqsolve(
+        diffrax.ODETerm(vector_field),
+        diffrax.Tsit5(),
+        t0=0.0,
+        t1=T,
+        dt0=T / n_steps,
+        y0=y0,
+        args=params,
+        saveat=diffrax.SaveAt(ts=ts_tau),
+        stepsize_controller=diffrax.PIDController(rtol=1e-7, atol=1e-9),
+    )
+    solution = sol.ys  # (n_steps+1, packed_dim), indexed by τ from 0 to T
     # Reverse so it's indexed by forward t from 0 to T.
     solution_t = solution[::-1]
 

@@ -35,6 +35,11 @@ io = [
 prebuilt-shape = [
     "trimesh>=4.0",
 ]
+# SDE / BFFG prebuilt models — diffrax powers the ODE-integrated backward
+# filter; the closed-form path doesn't need it.
+prebuilt-bffg = [
+    "diffrax>=0.6",
+]
 
 [project.urls]
 Homepage = "https://github.com/computationalevolutionarymorphometry/hyperiax"
