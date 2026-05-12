@@ -1,54 +1,39 @@
 [project]
 name = "hyperiax"
 authors = [
-  { name="Stefan Sommer", email="sommer@di.ku.dk" },
-  { name="Marcus Holte Teller", email="marcus@di.ku.dk" },
-  { name="Gefan Yang", email="***@di.ku.dk" },
-  { name="Michael Baand Severinsen", email="***@di.ku.dk" },
-  { name="Morten Akhøj Pedersen", email="***@di.ku.dk" },
-  { name="Nicklas Boserup", email="***@di.ku.dk" }
+  { name = "Stefan Sommer", email = "sommer@di.ku.dk" },
+  { name = "Marcus Holte Teller", email = "marcus@di.ku.dk" },
+  { name = "Gefan Yang", email = "***@di.ku.dk" },
+  { name = "Michael Baand Severinsen", email = "***@di.ku.dk" },
+  { name = "Morten Akhøj Pedersen", email = "***@di.ku.dk" },
+  { name = "Nicklas Boserup", email = "***@di.ku.dk" },
 ]
 description = "Tree traversals using JAX"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "jax",
-    "jaxlib",
-    "tqdm",
+    "jax>=0.4.30",
+    "jaxlib>=0.4.30",
+    "numpy>=1.26",
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-examples = [
-    "jaxdifferentialgeometry",
-    "notebook",
-    "ipykernel",
-    "matplotlib",
-    "pandas",
-    "plotly",
-    "trimesh",
+# Newick I/O + phylo tree visualization (ete3).
+io = [
+    "ete3>=3.1",
+    "six",  # ete3 still uses it on some platforms
 ]
-dev = [
-    "black",
-    "flake8",
-    "notebook",
-    "ipykernel",
-    "matplotlib",
-    "plotly",
-    "pytest",
-]
-doc = [
-    "hyperiax",
-    "sphinx-rtd-theme",
-    "sphinx-autodoc-annotation",
-    "nbsphinx",
-    "markupsafe==2.0.1",
-    "ipython",
+# Shape / LDDMM prebuilt models (trimesh for mesh sphere, etc.).
+prebuilt-shape = [
+    "trimesh>=4.0",
 ]
 
 [project.urls]
@@ -57,10 +42,32 @@ Issues = "https://github.com/computationalevolutionarymorphometry/hyperiax/issue
 
 [build-system]
 requires = [
-    "setuptools>=60",
+    "setuptools>=68",
     "setuptools-scm>=8.0",
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["hyperiax*"]
+
 [tool.setuptools_scm]
 version_file = "hyperiax/_version.py"
+
+# ── uv-specific configuration ─────────────────────────────────────────────
+# Dev-only dependencies (PEP 735 dependency groups).
+# Install via:   uv sync --group dev
+# All extras:    uv sync --all-extras --group dev
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-xdist>=3",
+]
+
+[tool.uv]
+# Pin a single resolution across all extras so toggling --extra doesn't churn the lockfile.
+required-version = ">=0.4"
+
+# ── pytest ────────────────────────────────────────────────────────────────
+# testpaths will be set to ["tests"] once Stage 1 adds the first tests.
+[tool.pytest.ini_options]
+addopts = ["-ra", "--strict-markers"]

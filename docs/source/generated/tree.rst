@@ -1,6 +1,0 @@
-﻿tree
-====
-
-.. automodule:: tree
-
-   
