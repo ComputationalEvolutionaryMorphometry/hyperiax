@@ -9,6 +9,7 @@ dependencies; individual prebuilts may, but they import lazily.
 
 from . import bffg_gaussian, bffg_sde, lddmm, sde, shape_kernels
 from .bffg_gaussian import (
+    gaussian_down_conditional,
     gaussian_down_unconditional,
     gaussian_up,
     init_gaussian_leaves,
@@ -26,6 +27,7 @@ from .phylo_mean import phylo_mean
 __all__ = [
     "bffg_gaussian",
     "bffg_sde",
+    "gaussian_down_conditional",
     "gaussian_down_unconditional",
     "gaussian_up",
     "init_gaussian_leaves",

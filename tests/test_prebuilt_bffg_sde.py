@@ -273,3 +273,149 @@ def test_sde_up_composes_under_lax_scan():
 
     final, _ = jax.lax.scan(body, sde_tree, xs=None, length=3)
     assert jnp.all(jnp.isfinite(final["F_T"]))
+
+
+# ── ODE-integrated path ────────────────────────────────────────────
+def _B_zero(t, params):
+    return jnp.zeros((N, N))
+
+
+def _beta_zero(t, params):
+    return jnp.zeros(N)
+
+
+def _B_damping(t, params):
+    return -0.5 * jnp.eye(N)
+
+
+def test_backward_filter_ode_with_zero_drift_matches_closed_form():
+    """The ODE-integrated path with ``B = β = 0`` must reproduce the
+    closed-form ``H_0 = H_T / (1 + H_T·T)`` etc. to numerical tolerance."""
+    T = 1.5
+    n_steps = 8
+    _dts = dts(T=T, n_steps=n_steps)
+    H_T = jnp.array([[2.0]])
+    F_T = jnp.array([3.0])
+    v_T = jnp.array([1.5])
+    c_T = jnp.array([0.5])
+    tildea = jnp.eye(1)
+
+    cf = backward_filter(
+        _dts, {}, c_T, v_T, F_T, H_T,
+        tildea0=tildea, tildeaT=tildea,
+    )
+    ode = backward_filter(
+        _dts, {}, c_T, v_T, F_T, H_T,
+        tildea0=tildea, tildeaT=tildea, B=_B_zero, beta=_beta_zero,
+    )
+
+    assert jnp.allclose(cf["H_0"], ode["H_0"], atol=1e-4)
+    assert jnp.allclose(cf["F_0"], ode["F_0"], atol=1e-4)
+    assert jnp.allclose(cf["c_0"], ode["c_0"], atol=1e-4)
+    # ODE path additionally returns per-step series.
+    assert ode["F_t"].shape == (n_steps, 1)
+    assert ode["H_t"].shape == (n_steps, 1, 1)
+
+
+def test_backward_filter_ode_returns_correct_endpoints():
+    """The first per-step entry is the state at t = dt (end of step 0)
+    and the last entry is at t = T (end of step n_steps-1, which is
+    also where the integration started in t-time)."""
+    T = 1.0
+    n_steps = 4
+    _dts = dts(T=T, n_steps=n_steps)
+    H_T = jnp.array([[1.0]])
+    F_T = jnp.array([2.0])
+    v_T = jnp.array([2.0])
+    c_T = jnp.array([0.0])
+
+    ode = backward_filter(
+        _dts, {}, c_T, v_T, F_T, H_T,
+        tildea0=jnp.eye(1), tildeaT=jnp.eye(1),
+        B=_B_zero, beta=_beta_zero,
+    )
+    # At t = T, H_t equals H_T (the initial condition of the backward sweep).
+    assert jnp.allclose(ode["H_t"][-1], H_T, atol=1e-4)
+    assert jnp.allclose(ode["F_t"][-1], F_T, atol=1e-4)
+
+
+def test_forward_guided_ode_with_zero_drift_matches_closed_form():
+    """Same inputs, same noise → trajectory and logpsi must match within
+    the ODE integrator's tolerance."""
+    T = 1.0
+    n_steps = 16
+    _dts = dts(T=T, n_steps=n_steps)
+    H_T = jnp.array([[1.5]])
+    F_T = jnp.array([2.0])
+    x0 = jnp.array([0.3])
+    dWs = jax.random.normal(jax.random.PRNGKey(0), (n_steps, 1))
+    tildea = jnp.eye(1)
+
+    Xs_cf, lp_cf = forward_guided(
+        x0, _dts, dWs, _zero_drift, _identity_sigma, params={},
+        a=_identity, F_T=F_T, H_T=H_T,
+        tildea0=tildea, tildeaT=tildea,
+    )
+
+    filt = backward_filter(
+        _dts, {}, jnp.zeros(1), jnp.zeros(1), F_T, H_T,
+        tildea0=tildea, tildeaT=tildea, B=_B_zero, beta=_beta_zero,
+    )
+    Xs_ode, lp_ode = forward_guided(
+        x0, _dts, dWs, _zero_drift, _identity_sigma, params={},
+        a=_identity, F_t=filt["F_t"], H_t=filt["H_t"],
+        tildea0=tildea, tildeaT=tildea,
+        B=_B_zero, beta=_beta_zero,
+    )
+    assert jnp.allclose(Xs_cf, Xs_ode, atol=1e-3)
+    assert jnp.allclose(lp_cf, lp_ode, atol=1e-3)
+
+
+def test_sde_up_ode_with_zero_drift_matches_closed_form_sweep():
+    edge_lengths = [0.0, 1.0, 2.0]
+    sde_tree, _ = _make_sde_tree(
+        edge_lengths, [[1.0], [2.0]], obs_var=0.1,
+    )
+    cf_out = sde_up(n_steps=N_STEPS, a=_identity)(sde_tree)
+    ode_out = sde_up(
+        n_steps=N_STEPS, a=_identity, B=_B_zero, beta=_beta_zero,
+    )(sde_tree)
+    assert jnp.allclose(cf_out["F_T"], ode_out["F_T"], atol=1e-3)
+    assert jnp.allclose(cf_out["H_T"], ode_out["H_T"], atol=1e-3)
+    assert jnp.allclose(cf_out["v_T"], ode_out["v_T"], atol=1e-3)
+
+
+def test_sde_full_pipeline_with_nontrivial_damping_runs():
+    """Damped OU-like drift (``B(t) = -0.5 I``): the full up → propagate →
+    conditional-down pipeline must run and put each leaf's terminal
+    state close to its observed value (with small slack from obs_var)."""
+    edge_lengths = [0.0, 1.0, 1.0]
+    sde_tree, topo = _make_sde_tree(
+        edge_lengths, [[1.0], [-1.0]], obs_var=0.05,
+        root_value=0.0,
+    )
+    sde_tree = sde_tree.set(noise=jnp.zeros((topo.size, N_STEPS, N * D)))
+
+    up_sweep = sde_up(n_steps=N_STEPS, a=_identity, B=_B_damping, beta=_beta_zero)
+    cond = sde_down_conditional(
+        N_STEPS, _zero_drift, _identity_sigma, _identity,
+        B=_B_damping, beta=_beta_zero,
+    )
+    t = up_sweep(sde_tree)
+    t = propagate_v_T_to_v_0()(t)
+    out = cond(t)
+    assert jnp.all(jnp.isfinite(out["value"]))
+    assert jnp.all(jnp.isfinite(out["logpsi"]))
+    # Leaves land near their observations (within ~0.1 for obs_var=0.05).
+    assert abs(float(out["value"][1, -1, 0]) - 1.0) < 0.1
+    assert abs(float(out["value"][2, -1, 0]) - (-1.0)) < 0.1
+
+
+def test_sde_up_ode_under_outer_jit():
+    edge_lengths = [0.0, 1.0, 2.0]
+    sde_tree, _ = _make_sde_tree(edge_lengths, [[1.0], [2.0]], obs_var=0.1)
+    sweep = sde_up(n_steps=N_STEPS, a=_identity, B=_B_zero, beta=_beta_zero)
+    eager = sweep(sde_tree)
+    jitted = jax.jit(sweep)(sde_tree)
+    assert jnp.allclose(eager["F_T"], jitted["F_T"], atol=1e-4)
+    assert jnp.allclose(eager["H_T"], jitted["H_T"], atol=1e-4)

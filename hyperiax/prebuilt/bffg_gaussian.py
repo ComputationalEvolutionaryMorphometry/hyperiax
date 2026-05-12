@@ -32,10 +32,11 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+from jax.scipy.linalg import cholesky
 
 from ..core.sweep import SweepFn, down, up
 from ..core.tree import Tree
-from ._gaussian_density import logphi, logphi_H, logphi_can
+from ._gaussian_density import logphi, logphi_H, logphi_can, logU
 from .sde import dot, solve
 
 
@@ -139,6 +140,95 @@ def init_gaussian_leaves(
         F_T=F_T_leaves,
         c_T=c_T_leaves,
     )
+
+
+# ── conditional forward sampling (BFFG forward-guided) ─────────────
+def gaussian_down_conditional(n: int, a, d: int = 1) -> SweepFn:
+    """Conditional forward sampling for Gaussian BFFG.
+
+    For each non-root node, draws a sample of its state given:
+
+    1. its parent's current state (just sampled by the previous level
+       of the down sweep), and
+    2. the subtree posterior summarized by ``(c_T, F_T, H_T)`` at this
+       node (set by :func:`gaussian_up`).
+
+    Writes the sampled state to ``value`` and the per-edge log
+    importance-weight contribution to ``logw``.
+
+    The per-edge filter intermediates ``(c_0, F_0, H_0)`` are *not*
+    persisted on the tree by :func:`gaussian_up`; this sweep re-derives
+    them inline from each node's own ``(c_T, F_T, H_T)`` and edge length
+    — the same math the up sweep used. This avoids extending the up
+    sweep's writes set and the associated schema growth.
+
+    Args:
+        n: latent state dimension.
+        a: ``(v, params) -> (n, n)`` diffusion covariance. Evaluated at
+            the *parent's* value for sampling (so the bridge respects
+            the current SDE state), and at this node's posterior mean
+            for the per-edge filter linearization (matching the up sweep).
+        d: data dimension.
+    """
+
+    @down(
+        reads=("noise", "edge_length", "c_T", "F_T", "H_T"),
+        reads_parent=("value",),
+        writes=("value", "logw"),
+    )
+    def _sweep(node, parent, params):
+        # ── Re-derive per-edge filter intermediates (c_0, F_0, H_0)
+        # using the same math as gaussian_up: linearization at v_T (the
+        # node's own posterior mean from the up sweep).
+        H_T_c = node.H_T
+        F_T_c = node.F_T
+        c_T_c = node.c_T
+        var = node.edge_length
+
+        v_T = solve(H_T_c, F_T_c)                           # (n*d,)
+        covar_lin = var * a(v_T, params)                    # (n, n)
+        invPhi_0 = jnp.eye(n) + H_T_c @ covar_lin
+        H_0 = jnp.linalg.solve(invPhi_0, H_T_c)
+        F_0 = solve(invPhi_0, F_T_c)
+        c_0 = jax.vmap(
+            lambda v_T_col, c_T_col, _:
+                c_T_col
+                - logphi_H(jnp.zeros(n), v_T_col, H_T_c)
+                + logphi_H(jnp.zeros(n), v_T_col, H_0),
+            in_axes=(1, 0, 1),
+        )(v_T.reshape((n, d)), c_T_c.reshape(d), F_T_c.reshape((n, d)))
+
+        # ── Conditional Gaussian sample given parent state.
+        # Sigma evaluated at parent's value (matches the legacy convention).
+        x = parent.value
+        Sigma = var * a(x, params)
+        invH = jnp.linalg.solve(jnp.eye(n) + Sigma @ H_T_c, Sigma)
+        mu = dot(invH, F_T_c + solve(Sigma, x))
+        new_value = mu + dot(
+            cholesky(invH, lower=True, check_finite=False), node.noise
+        )
+
+        # ── log importance weight (van der Meulen et al. §6).
+        Sigma_T_post = invH
+        v_T_post = dot(Sigma_T_post, F_T_c)
+        inv_covar_Sigma_T = jnp.linalg.solve(
+            jnp.eye(n) + H_T_c @ Sigma_T_post, H_T_c,
+        )
+        logw = jnp.sum(jax.vmap(
+            lambda vTpost_col, x_col, c_0_col, F_0_col:
+                logphi_H(vTpost_col, x_col, inv_covar_Sigma_T)
+                - logU(x_col, c_0_col, F_0_col, H_0),
+            in_axes=(1, 1, 0, 1),
+        )(
+            v_T_post.reshape((n, d)),
+            x.reshape((n, d)),
+            c_0.reshape(d),
+            F_0.reshape((n, d)),
+        ))
+
+        return {"value": new_value, "logw": logw}
+
+    return _sweep
 
 
 # ── unconditional forward sampling ──────────────────────────────────
