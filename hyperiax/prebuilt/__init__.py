@@ -7,6 +7,19 @@ Importing :mod:`hyperiax.prebuilt` itself does not pull in any optional
 dependencies; individual prebuilts may, but they import lazily.
 """
 
+from . import bffg_gaussian, sde
+from .bffg_gaussian import (
+    gaussian_down_unconditional,
+    gaussian_up,
+    init_gaussian_leaves,
+)
 from .phylo_mean import phylo_mean
 
-__all__ = ["phylo_mean"]
+__all__ = [
+    "bffg_gaussian",
+    "gaussian_down_unconditional",
+    "gaussian_up",
+    "init_gaussian_leaves",
+    "phylo_mean",
+    "sde",
+]
