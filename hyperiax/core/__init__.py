@@ -13,10 +13,10 @@ from .errors import (
     StructureMismatch,
 )
 from .schema import FieldSpec, Schema
-from .sweep import SweepFn, up
+from .sweep import SweepFn, down, up
 from .topology import Topology
 from .tree import Tree
-from .views import Children, Node
+from .views import Children, Node, Parent
 
 __all__ = [
     "Children",
@@ -24,12 +24,14 @@ __all__ = [
     "HyperiaxError",
     "MissingField",
     "Node",
+    "Parent",
     "Schema",
     "SchemaMismatch",
     "StructureMismatch",
     "SweepFn",
     "Topology",
     "Tree",
+    "down",
     "from_parents",
     "symmetric_topology",
     "up",

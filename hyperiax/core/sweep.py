@@ -87,12 +87,13 @@ class SweepFn:
         key: jax.Array | None = None,
     ) -> Tree:
         # Local import avoids a circular at module import time.
-        from .dispatch import up_dispatch
+        from .dispatch import down_dispatch, up_dispatch
         if params is None:
             params = {}
         if self.direction == "up":
             return up_dispatch(self, tree, params, key)
-        # @down arrives in Stage 3.
+        if self.direction == "down":
+            return down_dispatch(self, tree, params, key)
         raise NotImplementedError(f"{self.direction!r} dispatch not yet wired up")
 
 
@@ -133,6 +134,50 @@ def up(
             reads=_normalize(reads),
             reads_children=_normalize(reads_children),
             reads_parent=None,
+            writes=tuple(writes),
+        )
+    return _wrap
+
+
+def down(
+    *,
+    reads: Sequence[str] | None = None,
+    reads_parent: Sequence[str] | None = None,
+    writes: Sequence[str],
+) -> Callable[[Callable], SweepFn]:
+    """Decorator: mark a function as a down-sweep.
+
+    The decorated function has signature ``(node, parent, params)`` and
+    must return a ``dict[str, Array]`` whose key set equals ``writes``
+    exactly. Each returned value must have shape ``(*trailing,)`` matching
+    the schema for that field (per-node under :func:`jax.vmap`).
+
+    The root is never visited — it has no parent. Seed its data with
+    ``tree.set(...)`` before calling the sweep.
+
+    Args:
+        reads: Fields the function reads from the current node. ``None``
+            defaults to all schema fields at call time.
+        reads_parent: Fields the function reads from each node's parent.
+            ``None`` defaults to all schema fields at call time.
+        writes: Required. The fields the function writes back into the
+            tree. Must be non-empty.
+
+    Example::
+
+        @hx.down(reads=('delta',), reads_parent=('value',), writes=('value',))
+        def propagate(node, parent, params):
+            return {'value': parent.value + node.delta}
+
+        new_tree = propagate(tree)
+    """
+    def _wrap(fn: Callable) -> SweepFn:
+        return SweepFn(
+            direction="down",
+            fn=fn,
+            reads=_normalize(reads),
+            reads_children=None,
+            reads_parent=_normalize(reads_parent),
             writes=tuple(writes),
         )
     return _wrap

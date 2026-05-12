@@ -52,6 +52,21 @@ class Node:
         return f"Node(fields={sorted(self._fields)})"
 
 
+class Parent(Node):
+    """Per-node view of the parent's fields.
+
+    Surface is identical to :class:`Node`: each attribute is a JAX array of
+    shape ``(*trailing,)`` (under :func:`jax.vmap`, one parent record per
+    node at this level). Distinct class from ``Node`` for clearer error
+    messages and ``isinstance`` checks.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return f"Parent(fields={sorted(self._fields)})"
+
+
 class Children:
     """Per-parent view of children-of-each-node data.
 
