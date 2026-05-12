@@ -16,10 +16,11 @@ from .schema import FieldSpec, Schema
 from .sweep import SweepFn, down, up
 from .topology import Topology
 from .tree import Tree
-from .views import Children, Node, Parent
+from .views import Children, ChildrenAxis, Node, Parent
 
 __all__ = [
     "Children",
+    "ChildrenAxis",
     "FieldSpec",
     "HyperiaxError",
     "MissingField",

@@ -2,6 +2,7 @@
 
 from hyperiax.core import (
     Children,
+    ChildrenAxis,
     FieldSpec,
     HyperiaxError,
     MissingField,
@@ -21,6 +22,7 @@ from hyperiax.core import (
 
 __all__ = [
     "Children",
+    "ChildrenAxis",
     "FieldSpec",
     "HyperiaxError",
     "MissingField",

@@ -14,6 +14,9 @@ from __future__ import annotations
 from typing import Mapping
 
 import jax
+import jax.numpy as jnp
+
+from .errors import HyperiaxError
 
 
 class Node:
@@ -76,8 +79,11 @@ class Children:
     would do with a regular array. ``children.value.mean(0)`` averages over
     the ``k`` children of each parent.
 
-    *Unequal-degree mode* arrives in Stage 4 via a ``ChildrenAxis`` proxy
-    with the same surface for ``.sum/.max/.min/.prod/.mean(axis=0)``.
+    **Unequal-degree mode (Stage 4):** each attribute is a
+    :class:`ChildrenAxis` proxy that exposes the same reduction surface
+    (``.sum/.max/.min/.prod/.mean(axis=0)``) but dispatches to
+    :func:`jax.ops.segment_*` under the hood. The user-facing code is
+    identical between the two modes.
     """
 
     __slots__ = ("_fields",)
@@ -106,3 +112,101 @@ class Children:
 
     def __repr__(self) -> str:
         return f"Children(fields={sorted(self._fields)})"
+
+
+class ChildrenAxis:
+    """Virtual children-axis proxy for unequal-degree trees.
+
+    Backs a flat ``(M_total, *trailing)`` JAX array (every child at the
+    current level concatenated) plus a ``segments`` array assigning each
+    row to a parent. ``num_segments`` is a *static* Python int (derived
+    from the topology) — required for ``jax.ops.segment_*`` to produce a
+    statically-shaped output.
+
+    The user calls one of ``.sum / .prod / .max / .min / .mean (axis=0)``
+    to reduce over the children axis. Each dispatches to the matching
+    segment-reduction. Output shape is ``(num_segments, *trailing)``,
+    matching the corresponding ``Node`` view at the same level.
+
+    Non-reduction ops (indexing, broadcasted arithmetic, NumPy coercion)
+    are deliberately rejected: they would either silently produce wrong
+    results on the flat layout or imply a padded dense form the user
+    should request explicitly via :meth:`Children.gather` (TODO).
+    """
+
+    __slots__ = ("_flat", "_segments", "_num_segments", "_trailing")
+
+    def __init__(
+        self,
+        flat: jax.Array,
+        segments: jax.Array,
+        num_segments: int,
+        trailing: tuple,
+    ):
+        self._flat = flat
+        self._segments = segments
+        self._num_segments = num_segments
+        self._trailing = tuple(trailing)
+
+    # ── reductions ────────────────────────────────────────────────────
+    def sum(self, axis: int = 0) -> jax.Array:
+        self._check_axis(axis)
+        return jax.ops.segment_sum(
+            self._flat, self._segments,
+            num_segments=self._num_segments, indices_are_sorted=True,
+        )
+
+    def prod(self, axis: int = 0) -> jax.Array:
+        self._check_axis(axis)
+        return jax.ops.segment_prod(
+            self._flat, self._segments,
+            num_segments=self._num_segments, indices_are_sorted=True,
+        )
+
+    def max(self, axis: int = 0) -> jax.Array:
+        self._check_axis(axis)
+        return jax.ops.segment_max(
+            self._flat, self._segments,
+            num_segments=self._num_segments, indices_are_sorted=True,
+        )
+
+    def min(self, axis: int = 0) -> jax.Array:
+        self._check_axis(axis)
+        return jax.ops.segment_min(
+            self._flat, self._segments,
+            num_segments=self._num_segments, indices_are_sorted=True,
+        )
+
+    def mean(self, axis: int = 0) -> jax.Array:
+        self._check_axis(axis)
+        sums = self.sum(0)
+        counts = jax.ops.segment_sum(
+            jnp.ones_like(self._segments, dtype=self._flat.dtype),
+            self._segments,
+            num_segments=self._num_segments, indices_are_sorted=True,
+        )
+        # Reshape counts to broadcast against the trailing dims.
+        counts = counts.reshape((self._num_segments,) + (1,) * len(self._trailing))
+        return sums / counts
+
+    # ── guards ────────────────────────────────────────────────────────
+    @staticmethod
+    def _check_axis(axis: int) -> None:
+        if axis != 0:
+            raise ValueError(
+                f"ChildrenAxis reductions must use axis=0 (the children axis); got axis={axis}."
+            )
+
+    def __array__(self, dtype=None):
+        raise HyperiaxError(
+            "ChildrenAxis is a virtual proxy on an unequal-degree tree; it "
+            "cannot be coerced to a dense array. Reduce first via "
+            ".sum/.prod/.max/.min/.mean(axis=0), or fall back to "
+            "children.gather() for a padded view."
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"ChildrenAxis(num_segments={self._num_segments}, "
+            f"trailing={self._trailing}, flat_size={self._flat.shape[0]})"
+        )
