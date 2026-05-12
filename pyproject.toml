@@ -68,6 +68,6 @@ dev = [
 required-version = ">=0.4"
 
 # ── pytest ────────────────────────────────────────────────────────────────
-# testpaths will be set to ["tests"] once Stage 1 adds the first tests.
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers"]
