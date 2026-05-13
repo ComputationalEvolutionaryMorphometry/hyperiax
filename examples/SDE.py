@@ -15,22 +15,22 @@ def dts(T=1.,n_steps=100):
     return jnp.array([T/n_steps]*n_steps)
 
 # Euler-Maruyama SDE integration
-def forward(x,dts,dWs,b,sigma,params,a=None):
+def forward(x0,dts,dWs,b,sigma,params,a=None):
     def SDE(carry, val):
         t,X = carry
         dt,dW = val
         
         # SDE
         if sigma is not None:
-            Xtp1 = X + b(t,X,params)*dt + dot(sigma(x,params),dW)
+            Xtp1 = X + b(t,X,params)*dt + dot(sigma(X,params),dW)
         else:
             assert(a is not None)
-            Xtp1 = X + b(t,X,params)*dt + dot(cholesky(a(x,params),lower=True,check_finite=False),dW)
+            Xtp1 = X + b(t,X,params)*dt + dot(cholesky(a(X,params),lower=True,check_finite=False),dW)
         tp1 = t + dt
         
         return((tp1,Xtp1),(t,X))    
 
     # sample
-    (T,X), (ts,Xs) = jax.lax.scan(SDE,(0.,x),(dts,dWs))
+    (T,X), (ts,Xs) = jax.lax.scan(SDE,(0.,x0),(dts,dWs))
     Xs = jnp.vstack((Xs,X))
     return Xs
