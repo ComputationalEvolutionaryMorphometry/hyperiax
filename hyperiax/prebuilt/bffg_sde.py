@@ -25,10 +25,12 @@ variants:
 
 References
 ----------
-- Van der Meulen, Schauer et al., *Continuous-discrete smoothing of
-  diffusions* (https://arxiv.org/abs/2010.03509)
-- Mider et al., *Automatic Backward Filtering Forward Guiding*
-  (https://arxiv.org/abs/2203.04155)
+- van der Meulen, F. H. & Sommer, S. (2025). *Backward Filtering
+  Forward Guiding.* Journal of Machine Learning Research 26(281), 1–51.
+  https://arxiv.org/abs/2505.18239
+- van der Meulen, F. H. & Schauer, M. (2020-2022). *Automatic Backward
+  Filtering Forward Guiding for Markov processes and graphical models.*
+  https://arxiv.org/abs/2010.03509
 """
 
 from __future__ import annotations

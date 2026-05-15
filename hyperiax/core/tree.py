@@ -20,12 +20,28 @@ from .schema import FieldSpec, Schema
 from .topology import Topology
 
 
+# Field names that would shadow ``Tree`` attributes / methods under
+# attribute access (``tree.value``). Schema field names are checked against
+# this set at construction time so the shadowing fails loudly instead of
+# silently masking the data.
+_RESERVED_FIELD_NAMES = frozenset({
+    "topology", "schema", "data", "size",          # dataclass fields + property
+    "set", "set_at", "update", "drop",             # mutators
+    "empty", "from_data",                          # classmethods
+})
+
+
 @dataclass(frozen=True, eq=False)
 class Tree:
     """A topology + a typed dict of (N, *trailing) arrays.
 
     Construction is always functional: every "mutator" returns a new Tree
     sharing the same Topology and (usually) Schema, with replaced data.
+
+    Data fields are reachable two ways: ``tree['value']`` (dict-style, the
+    safe form when the field name is dynamic or collides with a reserved
+    name) and ``tree.value`` (attribute-style, the canonical form mirroring
+    ``node.value`` / ``children.value`` inside a sweep).
     """
 
     topology: Topology
@@ -42,6 +58,7 @@ class Tree:
         """Allocate a Tree of zeros with the declared schema."""
         if not isinstance(schema, Schema):
             schema = Schema.from_dict(schema)
+        cls._check_reserved(schema)
         n = topology.size
         data = {
             name: jnp.zeros((n, *spec.shape), dtype=spec.dtype)
@@ -63,7 +80,19 @@ class Tree:
                     f"Field {name!r}: leading axis {arr.shape[0]} != topology size {topology.size}"
                 )
             schema_dict[name] = FieldSpec(shape=tuple(arr.shape[1:]), dtype=arr.dtype)
-        return cls(topology=topology, schema=Schema.from_dict(schema_dict), data=dict(data))
+        schema = Schema.from_dict(schema_dict)
+        cls._check_reserved(schema)
+        return cls(topology=topology, schema=schema, data=dict(data))
+
+    @classmethod
+    def _check_reserved(cls, schema: Schema) -> None:
+        conflicts = sorted(set(schema.names) & _RESERVED_FIELD_NAMES)
+        if conflicts:
+            raise SchemaMismatch(
+                f"Schema field name(s) {conflicts} would shadow Tree attributes "
+                f"under attribute access. Reserved names: {sorted(_RESERVED_FIELD_NAMES)}. "
+                f"Rename your fields, or access via tree['name'] only."
+            )
 
     # ── access ────────────────────────────────────────────────────────
     def __getitem__(self, name: str) -> jax.Array:
@@ -73,6 +102,21 @@ class Tree:
             raise MissingField(
                 f"Field {name!r} is not in this tree. "
                 f"Known fields: {self.schema.names}"
+            ) from None
+
+    def __getattr__(self, name: str) -> jax.Array:
+        # ``__getattr__`` is only called after normal attribute lookup misses,
+        # so dataclass fields (topology, schema, data) and methods are unaffected.
+        # Underscore-prefixed names are kept out to avoid recursing into
+        # pytree / dataclass machinery during unpickling, repr, etc.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        try:
+            return self.data[name]
+        except KeyError:
+            raise AttributeError(
+                f"Tree has no field {name!r}. Schema: {self.schema.names}. "
+                f"(Did you forget to add it via Tree.empty(topo, schema=...) or tree.update(...)?)"
             ) from None
 
     @property
@@ -144,7 +188,9 @@ class Tree:
                     )
                 merged[name] = FieldSpec(shape=tuple(arr.shape[1:]), dtype=arr.dtype)
                 new_data[name] = arr
-        return Tree(topology=self.topology, schema=Schema.from_dict(merged), data=new_data)
+        new_schema = Schema.from_dict(merged)
+        self._check_reserved(new_schema)
+        return Tree(topology=self.topology, schema=new_schema, data=new_data)
 
     def drop(self, *names: str) -> "Tree":
         """Drop fields; returns a Tree with reduced schema and data."""

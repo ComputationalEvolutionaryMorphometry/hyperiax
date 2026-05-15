@@ -148,3 +148,40 @@ def test_tree_equality_compares_data(topo):
     c = Tree.empty(topo, {"value": (2,)}).set(value=jnp.zeros((7, 2)))
     assert a == b
     assert a != c
+
+
+# ── attribute-style access ───────────────────────────────────────────
+def test_attribute_access_returns_field(topo):
+    tree = Tree.empty(topo, {"value": (2,)}).set(value=jnp.ones((7, 2)))
+    assert jnp.array_equal(tree.value, tree["value"])
+
+
+def test_attribute_access_unknown_field_raises_attribute_error(topo):
+    tree = Tree.empty(topo, {"value": (2,)})
+    with pytest.raises(AttributeError, match="missing"):
+        _ = tree.missing
+
+
+def test_attribute_access_does_not_shadow_dataclass_fields(topo):
+    tree = Tree.empty(topo, {"value": (2,)})
+    # topology, schema, data, size are real dataclass attrs / properties,
+    # not data fields — must keep returning the dataclass values.
+    assert tree.topology is topo
+    assert "value" in tree.schema
+    assert isinstance(tree.data, dict)
+    assert tree.size == topo.size
+
+
+@pytest.mark.parametrize(
+    "reserved",
+    ["topology", "schema", "data", "size", "set", "update", "drop", "empty"],
+)
+def test_reserved_field_name_rejected(topo, reserved):
+    with pytest.raises(SchemaMismatch, match="shadow"):
+        Tree.empty(topo, {reserved: ()})
+
+
+def test_reserved_field_name_rejected_in_update(topo):
+    tree = Tree.empty(topo, {"value": ()})
+    with pytest.raises(SchemaMismatch, match="shadow"):
+        tree.update(size=())
