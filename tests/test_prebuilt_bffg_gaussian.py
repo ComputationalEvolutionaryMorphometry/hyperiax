@@ -331,3 +331,115 @@ def test_gaussian_up_then_down_conditional_lax_scan_pipeline():
     final, _ = jax.lax.scan(step, tree, keys)
     assert jnp.all(jnp.isfinite(final["value"]))
     assert jnp.all(jnp.isfinite(final["logw"]))
+
+
+# ── Theorem 14 alignment (van der Meulen & Sommer 2025) ────────────
+def _bffg_forward_logw_sum(a_fn, params, leaf_obs, topo, empty, z):
+    """Full BFFG up + conditional down with fixed root=0; return sum(logw)."""
+    n, d = 1, 1
+    up = gaussian_up(n, a_fn, d=d)
+    down = gaussian_down_conditional(n, a_fn, d=d)
+    t = init_gaussian_leaves(empty, leaf_obs, obs_var=params["tau_sq"], n=n, d=d)
+    t = up(t, params=params)
+    t = t.set_at(topo.is_root, value=jnp.zeros((1, n * d)))
+    t = t.set(noise=z[:, None])
+    t = down(t, params=params)
+    return t.logw.sum()
+
+
+def test_gaussian_down_conditional_logw_is_zero_in_pure_linear_case():
+    """Theorem 14, p.16: when the true dynamics are linear (``a`` independent
+    of state), the auxiliary equals the true kernel and ``w(x) ≡ 1`` for all
+    x → ``sum(logw) ≡ 0`` for any path (any noise z)."""
+    topo = symmetric_topology(height=3, degree=2)
+    N = topo.size
+    n, d = 1, 1
+    schema = {
+        "value": (n * d,), "noise": (n * d,), "edge_length": (),
+        "c_T": (d,), "F_T": (n * d,), "H_T": (n, n), "logw": (),
+    }
+    empty = Tree.empty(topo, schema).set(edge_length=jnp.ones(N))
+    a = lambda v, p: p["sigma_sq"] * jnp.eye(n)
+    params = {"sigma_sq": 0.5, "tau_sq": 0.1}
+
+    # Random leaf observations & many independent forward paths.
+    n_leaves = int(topo.is_leaf.sum())
+    leaf_obs = jax.random.normal(jax.random.PRNGKey(0), (n_leaves, n * d))
+    zs = jax.random.normal(jax.random.PRNGKey(1), (50, N))
+    logws = jax.vmap(lambda z: _bffg_forward_logw_sum(a, params, leaf_obs, topo, empty, z))(zs)
+    # In Gaussian-linear, every per-edge logw is identically zero — so
+    # the path sum is machine-precision zero, not just small in expectation.
+    assert float(jnp.abs(logws).max()) == 0.0
+
+
+def test_gaussian_down_conditional_logw_matches_theorem_14_on_single_edge():
+    """Single-edge hand check: sum(logw) over a 1-leaf tree equals
+    ``logφ(H⁻¹F; x, Q(x)+H⁻¹) − logφ(H⁻¹F; x, Q̃+H⁻¹)`` evaluated at the
+    fixed root x=0, with Q̃ linearised at v_T = H⁻¹F."""
+    # Tree: root + single leaf.
+    topo = Topology.from_parents([0, 0])
+    n, d = 1, 1
+    schema = {
+        "value": (n * d,), "noise": (n * d,), "edge_length": (),
+        "c_T": (d,), "F_T": (n * d,), "H_T": (n, n), "logw": (),
+    }
+    empty = Tree.empty(topo, schema).set(edge_length=jnp.asarray([0.0, 1.5]))
+    # Nonlinear a: Q(v) = σ² · (1 + 0.3·v²).
+    a = lambda v, p: p["sigma_sq"] * (1.0 + 0.3 * v[0] ** 2) * jnp.eye(n)
+    params = {"sigma_sq": 0.4, "tau_sq": 0.2}
+    leaf_obs = jnp.asarray([[1.3]])
+
+    # Run the sweep with zero noise (sample is deterministic; logw doesn't
+    # depend on noise — it only sees the parent's value).
+    t = init_gaussian_leaves(empty, leaf_obs, obs_var=params["tau_sq"], n=n, d=d)
+    t = gaussian_up(n, a, d=d)(t, params=params)
+    t = t.set_at(topo.is_root, value=jnp.zeros((1, n * d)))
+    t = t.set(noise=jnp.zeros((topo.size, n * d)))
+    out = gaussian_down_conditional(n, a, d=d)(t, params=params)
+
+    # Hand-compute Theorem 14 step 3 for the single edge (root → leaf).
+    # Canonical at the leaf node is what init_gaussian_leaves set:
+    # H = I/τ², F = H·y.  v_T = H⁻¹F = y.
+    H_T_c = jnp.eye(n) / params["tau_sq"]
+    F_T_c = (H_T_c @ leaf_obs[0])
+    v_T = jnp.linalg.solve(H_T_c, F_T_c)
+    var = 1.5
+    x_parent = jnp.zeros(n)
+    Q_true = var * a(x_parent, params)
+    Q_aux  = var * a(v_T,      params)
+    C_true = Q_true + jnp.linalg.inv(H_T_c)
+    C_aux  = Q_aux  + jnp.linalg.inv(H_T_c)
+    expected = (
+        jax.scipy.stats.multivariate_normal.logpdf(v_T, x_parent, C_true)
+        - jax.scipy.stats.multivariate_normal.logpdf(v_T, x_parent, C_aux)
+    )
+    # Tree-wide sum(logw) is just this one edge's contribution; root and
+    # leaf both write a logw entry but the root's was never assigned by
+    # the down sweep (it's a @down with reads_parent), so it stays 0.
+    assert jnp.allclose(out.logw.sum(), expected, atol=1e-6), (
+        f"sum(logw)={float(out.logw.sum())}, expected={float(expected)}"
+    )
+
+
+def test_gaussian_down_conditional_logw_nonzero_under_state_dependent_a():
+    """State-dependent ``a`` produces a non-trivial importance correction:
+    ``sum(logw)`` varies across z draws and is not identically zero."""
+    topo = symmetric_topology(height=3, degree=2)
+    N = topo.size
+    n, d = 1, 1
+    schema = {
+        "value": (n * d,), "noise": (n * d,), "edge_length": (),
+        "c_T": (d,), "F_T": (n * d,), "H_T": (n, n), "logw": (),
+    }
+    empty = Tree.empty(topo, schema).set(edge_length=jnp.ones(N))
+    a = lambda v, p: p["sigma_sq"] * (1.0 + 0.3 * v[0] ** 2) * jnp.eye(n)
+    params = {"sigma_sq": 0.5, "tau_sq": 0.1}
+
+    n_leaves = int(topo.is_leaf.sum())
+    leaf_obs = jax.random.normal(jax.random.PRNGKey(7), (n_leaves, n * d))
+    zs = jax.random.normal(jax.random.PRNGKey(8), (50, N))
+    logws = jax.vmap(lambda z: _bffg_forward_logw_sum(a, params, leaf_obs, topo, empty, z))(zs)
+    # Across 50 independent forward paths the importance weight should
+    # spread non-trivially — not the machine-precision zero of the linear case.
+    assert float(jnp.abs(logws).max()) > 1.0
+    assert float(logws.std()) > 0.1

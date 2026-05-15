@@ -22,10 +22,12 @@ this needs).
 
 References
 ----------
-- Van der Meulen, Schauer et al., *Continuous-discrete smoothing of
-  diffusions* (https://arxiv.org/abs/2010.03509)
-- Mider et al., *Automatic Backward Filtering Forward Guiding*
-  (https://arxiv.org/abs/2203.04155)
+- van der Meulen, F. H. & Sommer, S. (2025). *Backward Filtering
+  Forward Guiding.* Journal of Machine Learning Research 26(281), 1–51.
+  https://arxiv.org/abs/2505.18239
+- van der Meulen, F. H. & Schauer, M. (2020-2022). *Automatic Backward
+  Filtering Forward Guiding for Markov processes and graphical models.*
+  https://arxiv.org/abs/2010.03509
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ from jax.scipy.linalg import cholesky
 
 from ..core.sweep import SweepFn, down, up
 from ..core.tree import Tree
-from ._gaussian_density import logphi, logphi_H, logphi_can, logU
+from ._gaussian_density import logphi, logphi_can
 from .sde import dot, solve
 
 
@@ -144,87 +146,94 @@ def init_gaussian_leaves(
 
 # ── conditional forward sampling (BFFG forward-guided) ─────────────
 def gaussian_down_conditional(n: int, a, d: int = 1) -> SweepFn:
-    """Conditional forward sampling for Gaussian BFFG.
+    """Conditional forward sampling for nonlinear Gaussian BFFG.
 
-    For each non-root node, draws a sample of its state given:
+    Implements the BFFG-guided proposal of van der Meulen & Sommer (2025),
+    Theorem 14. For each non-root node, draws a sample of its state given
+    its parent's current state (just sampled by the previous level of the
+    down sweep) and the subtree canonical message ``(F_T, H_T)`` at this
+    node (set by :func:`gaussian_up`). The per-edge log importance-weight
+    correction is written to ``logw``.
 
-    1. its parent's current state (just sampled by the previous level
-       of the down sweep), and
-    2. the subtree posterior summarized by ``(c_T, F_T, H_T)`` at this
-       node (set by :func:`gaussian_up`).
+    **Model assumed by this prebuilt.** The true Markov transition along
+    each edge is
 
-    Writes the sampled state to ``value`` and the per-edge log
-    importance-weight contribution to ``logw``.
+        X_t | X_s = x  ~  N(μ(x), Q(x)),     Q(x) = ℓ · a(x, params),
 
-    The per-edge filter intermediates ``(c_0, F_0, H_0)`` are *not*
-    persisted on the tree by :func:`gaussian_up`; this sweep re-derives
-    them inline from each node's own ``(c_T, F_T, H_T)`` and edge length
-    — the same math the up sweep used. This avoids extending the up
-    sweep's writes set and the associated schema growth.
+    with ``μ(x) = x`` (identity drift, i.e. Brownian-style increment) and
+    ``Q(x)`` possibly state-dependent. The BFFG auxiliary used for
+    backward filtering is the linearisation
+
+        X̃_t | X̃_s = x  ~  N(Φ x + β, Q̃),    Φ = I,  β = 0,  Q̃ = ℓ · a(v_T, params),
+
+    where ``v_T = H_T⁻¹ F_T`` is the canonical posterior mean from the
+    child's message — matching the linearisation point used by
+    :func:`gaussian_up`.
+
+    **Sampling (Theorem 14, step 2).** The guided proposal at the child is
+
+        X°_t | X°_s = x  ~  N^can(F + Q(x)⁻¹ x,  H + Q(x)⁻¹).
+
+    **Importance weight (Theorem 14, step 3).**
+
+        w(x) = (P g)(x) / (P̃ g)(x)
+             = φ(H⁻¹F;  μ(x),  Q(x) + H⁻¹) / φ(H⁻¹F;  Φx + β,  Q̃ + H⁻¹).
+
+    In the pure linear-Gaussian limit (``a`` independent of ``v``) we have
+    ``Q(x) = Q̃`` and ``μ(x) = Φ x + β``, so the two densities coincide
+    and ``logw ≡ 0`` exactly — matching the paper's remark on p.16 that
+    ``w ≡ 1`` whenever the true dynamics are linear. State-dependent ``a``
+    drives ``logw`` away from zero and produces the importance correction
+    that BFFG-MCMC then uses.
 
     Args:
         n: latent state dimension.
-        a: ``(v, params) -> (n, n)`` diffusion covariance. Evaluated at
-            the *parent's* value for sampling (so the bridge respects
-            the current SDE state), and at this node's posterior mean
-            for the per-edge filter linearization (matching the up sweep).
-        d: data dimension.
+        a: ``(v, params) -> (n, n)`` diffusion covariance per unit edge
+            length. Evaluated at the parent's value for the true ``Q(x)``
+            and at the child's canonical mean ``v_T`` for the auxiliary
+            ``Q̃`` — matching :func:`gaussian_up`'s linearisation.
+        d: data dimension. The canonical message factors across the ``d``
+            iid data slices.
     """
 
     @down(
-        reads=("noise", "edge_length", "c_T", "F_T", "H_T"),
+        reads=("noise", "edge_length", "F_T", "H_T"),
         reads_parent=("value",),
         writes=("value", "logw"),
     )
     def _sweep(node, parent, params):
-        # ── Re-derive per-edge filter intermediates (c_0, F_0, H_0)
-        # using the same math as gaussian_up: linearization at v_T (the
-        # node's own posterior mean from the up sweep).
         H_T_c = node.H_T
         F_T_c = node.F_T
-        c_T_c = node.c_T
         var = node.edge_length
 
-        v_T = solve(H_T_c, F_T_c)                           # (n*d,)
-        covar_lin = var * a(v_T, params)                    # (n, n)
-        invPhi_0 = jnp.eye(n) + H_T_c @ covar_lin
-        H_0 = jnp.linalg.solve(invPhi_0, H_T_c)
-        F_0 = solve(invPhi_0, F_T_c)
-        c_0 = jax.vmap(
-            lambda v_T_col, c_T_col, _:
-                c_T_col
-                - logphi_H(jnp.zeros(n), v_T_col, H_T_c)
-                + logphi_H(jnp.zeros(n), v_T_col, H_0),
-            in_axes=(1, 0, 1),
-        )(v_T.reshape((n, d)), c_T_c.reshape(d), F_T_c.reshape((n, d)))
+        # Linearization point matching gaussian_up.
+        v_T = solve(H_T_c, F_T_c)                            # (n·d,)
 
-        # ── Conditional Gaussian sample given parent state.
-        # Sigma evaluated at parent's value (matches the legacy convention).
+        # ── Conditional Gaussian sample (Theorem 14, step 2). With μ(x)=x,
+        # the canonical posterior given the parent is
+        #     N^can(F + Q(x)⁻¹·x,  H + Q(x)⁻¹).
         x = parent.value
-        Sigma = var * a(x, params)
-        invH = jnp.linalg.solve(jnp.eye(n) + Sigma @ H_T_c, Sigma)
-        mu = dot(invH, F_T_c + solve(Sigma, x))
+        Q_true = var * a(x, params)                          # (n, n) — Q(x)
+        invH = jnp.linalg.solve(jnp.eye(n) + Q_true @ H_T_c, Q_true)  # (n, n)
+        mu = dot(invH, F_T_c + solve(Q_true, x))
         new_value = mu + dot(
             cholesky(invH, lower=True, check_finite=False), node.noise
         )
 
-        # ── log importance weight (van der Meulen et al. §6).
-        Sigma_T_post = invH
-        v_T_post = dot(Sigma_T_post, F_T_c)
-        inv_covar_Sigma_T = jnp.linalg.solve(
-            jnp.eye(n) + H_T_c @ Sigma_T_post, H_T_c,
-        )
+        # ── Importance weight (Theorem 14, step 3). With μ(x)=x, Φ=I, β=0
+        # the two means coincide and logw reduces to the log-ratio of two
+        # Gaussians at H⁻¹F that differ only in their covariance term
+        # (Q(x) vs Q̃ = Q(v_T)). Linear case ⇒ both covariances equal ⇒
+        # logw = 0 identically.
+        Q_aux = var * a(v_T, params)                         # (n, n) — Q̃
+        H_inv = jnp.linalg.inv(H_T_c)                        # H⁻¹ (n, n)
+        C_true = Q_true + H_inv
+        C_aux  = Q_aux  + H_inv
         logw = jnp.sum(jax.vmap(
-            lambda vTpost_col, x_col, c_0_col, F_0_col:
-                logphi_H(vTpost_col, x_col, inv_covar_Sigma_T)
-                - logU(x_col, c_0_col, F_0_col, H_0),
-            in_axes=(1, 1, 0, 1),
-        )(
-            v_T_post.reshape((n, d)),
-            x.reshape((n, d)),
-            c_0.reshape(d),
-            F_0.reshape((n, d)),
-        ))
+            lambda v_T_col, x_col:
+                logphi(v_T_col, x_col, C_true) - logphi(v_T_col, x_col, C_aux),
+            in_axes=(1, 1),
+        )(v_T.reshape((n, d)), x.reshape((n, d))))
 
         return {"value": new_value, "logw": logw}
 
