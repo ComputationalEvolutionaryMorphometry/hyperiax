@@ -4,10 +4,6 @@ Each kernel takes a *pairwise-difference* tensor ``x`` of shape
 ``(n, n, d)`` (landmark ``i`` minus landmark ``j`` along each spatial
 axis) and returns the ``(n, n)`` Gram matrix. ``params['k_alpha']`` is
 the kernel amplitude and ``params['k_sigma']`` is the length scale.
-
-Ported verbatim from the legacy ``examples/shape.py``; only the
-top-level lambdas were rewritten as plain functions for clearer
-introspection (and so ``jax.jit`` shows a proper qualname in tracebacks).
 """
 
 from __future__ import annotations

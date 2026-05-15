@@ -1,8 +1,5 @@
 """SDE utilities: time discretization and Euler-Maruyama integration.
 
-Pure-math helpers; no tree machinery. Ported from the legacy
-``examples/SDE.py`` (signatures preserved).
-
 The factorized :func:`dot` / :func:`solve` operate on a flattened
 ``(n·d,)`` state vector as if it were ``(n, d)`` — useful for
 landmark-style data where each of ``n`` landmarks carries a
@@ -62,11 +59,11 @@ def forward(x, dts, dWs, b, sigma, params, a=None) -> jax.Array:
         t, X = carry
         dt, dW = val
         if sigma is not None:
-            Xtp1 = X + b(t, X, params) * dt + dot(sigma(x, params), dW)
+            Xtp1 = X + b(t, X, params) * dt + dot(sigma(X, params), dW)
         else:
             assert a is not None, "either sigma or a must be provided"
             Xtp1 = X + b(t, X, params) * dt + dot(
-                cholesky(a(x, params), lower=True, check_finite=False), dW
+                cholesky(a(X, params), lower=True, check_finite=False), dW
             )
         return ((t + dt, Xtp1), (t, X))
 

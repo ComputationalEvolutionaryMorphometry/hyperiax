@@ -19,7 +19,45 @@ import jax.numpy as jnp
 from .errors import HyperiaxError
 
 
-class Node:
+class _FieldsView:
+    """Shared base for per-call field-dict views.
+
+    Provides attribute / item / iteration / containment access over a fixed
+    dict of arrays. Subclasses set ``_kind`` (used in error messages and
+    repr) and a tag for which decorator argument adds missing fields.
+    """
+
+    __slots__ = ("_fields",)
+    _kind: str = "Fields"
+    _reads_arg: str = "reads"
+
+    def __init__(self, fields: Mapping[str, jax.Array]):
+        self._fields = dict(fields)
+
+    def __getattr__(self, name: str):
+        try:
+            return self._fields[name]
+        except KeyError:
+            raise AttributeError(
+                f"{self._kind} field {name!r} is not available in this scope. "
+                f"Add it to `{self._reads_arg}=...` on the sweep. "
+                f"Available: {sorted(self._fields)}"
+            ) from None
+
+    def __getitem__(self, name: str):
+        return self._fields[name]
+
+    def __iter__(self):
+        return iter(self._fields)
+
+    def __contains__(self, name) -> bool:
+        return name in self._fields
+
+    def __repr__(self) -> str:
+        return f"{self._kind}(fields={sorted(self._fields)})"
+
+
+class Node(_FieldsView):
     """Sliced per-node fields for one level (or one selected subset).
 
     Each attribute is a JAX array of shape ``(scope_size, *trailing)`` where
@@ -27,91 +65,39 @@ class Node:
     a level's non-leaves).
     """
 
-    __slots__ = ("_fields",)
-
-    def __init__(self, fields: Mapping[str, jax.Array]):
-        self._fields = dict(fields)
-
-    def __getattr__(self, name: str):
-        try:
-            return self._fields[name]
-        except KeyError:
-            raise AttributeError(
-                f"Field {name!r} is not available in this scope. "
-                f"Add it to `reads=...` on the sweep, or to the tree's schema. "
-                f"Available: {sorted(self._fields)}"
-            ) from None
-
-    def __getitem__(self, name: str):
-        return self._fields[name]
-
-    def __iter__(self):
-        return iter(self._fields)
-
-    def __contains__(self, name) -> bool:
-        return name in self._fields
-
-    def __repr__(self) -> str:
-        return f"Node(fields={sorted(self._fields)})"
+    __slots__ = ()
+    _kind = "Node"
+    _reads_arg = "reads"
 
 
-class Parent(Node):
-    """Per-node view of the parent's fields.
+class Parent(_FieldsView):
+    """Per-node view of the parent's fields. Under :func:`jax.vmap`, each
+    attribute is a JAX array of shape ``(*trailing,)`` — one parent record
+    per node at the current level."""
 
-    Surface is identical to :class:`Node`: each attribute is a JAX array of
-    shape ``(*trailing,)`` (under :func:`jax.vmap`, one parent record per
-    node at this level). Distinct class from ``Node`` for clearer error
-    messages and ``isinstance`` checks.
+    __slots__ = ()
+    _kind = "Parent"
+    _reads_arg = "reads_parent"
+
+
+class Children(_FieldsView):
+    """Per-parent view of children-of-each-node data.
+
+    **Equal-degree mode:** each attribute is a real JAX array of shape
+    ``(scope_size, k, *trailing)`` where ``k`` is the (constant) number of
+    children per parent. Free to slice, index, multiply — anything you would
+    do with a regular array. ``children.value.mean(0)`` averages over the
+    ``k`` children of each parent.
+
+    **Unequal-degree mode:** each attribute is a :class:`ChildrenAxis` proxy
+    exposing the same reduction surface (``.sum/.max/.min/.prod/.mean``) but
+    dispatching to :func:`jax.ops.segment_*`. User code is identical to the
+    equal-degree case.
     """
 
     __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"Parent(fields={sorted(self._fields)})"
-
-
-class Children:
-    """Per-parent view of children-of-each-node data.
-
-    **Equal-degree mode (Stage 2):** each attribute is a real JAX array of
-    shape ``(scope_size, k, *trailing)`` where ``k`` is the (constant) number
-    of children per parent. Free to slice, index, multiply — anything you
-    would do with a regular array. ``children.value.mean(0)`` averages over
-    the ``k`` children of each parent.
-
-    **Unequal-degree mode (Stage 4):** each attribute is a
-    :class:`ChildrenAxis` proxy that exposes the same reduction surface
-    (``.sum/.max/.min/.prod/.mean(axis=0)``) but dispatches to
-    :func:`jax.ops.segment_*` under the hood. The user-facing code is
-    identical between the two modes.
-    """
-
-    __slots__ = ("_fields",)
-
-    def __init__(self, fields: Mapping[str, jax.Array]):
-        self._fields = dict(fields)
-
-    def __getattr__(self, name: str):
-        try:
-            return self._fields[name]
-        except KeyError:
-            raise AttributeError(
-                f"Children field {name!r} is not available in this scope. "
-                f"Add it to `reads_children=...` on the sweep. "
-                f"Available: {sorted(self._fields)}"
-            ) from None
-
-    def __getitem__(self, name: str):
-        return self._fields[name]
-
-    def __iter__(self):
-        return iter(self._fields)
-
-    def __contains__(self, name) -> bool:
-        return name in self._fields
-
-    def __repr__(self) -> str:
-        return f"Children(fields={sorted(self._fields)})"
+    _kind = "Children"
+    _reads_arg = "reads_children"
 
 
 class ChildrenAxis:

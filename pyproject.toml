@@ -26,10 +26,9 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-# Newick I/O + phylo tree visualization (ete3).
+# Newick I/O via ete3.
 io = [
     "ete3>=3.1",
-    "six",  # ete3 still uses it on some platforms
 ]
 # Shape / LDDMM prebuilt models (trimesh for mesh sphere, etc.).
 prebuilt-shape = [
@@ -39,6 +38,11 @@ prebuilt-shape = [
 # filter; the closed-form path doesn't need it.
 prebuilt-bffg = [
     "diffrax>=0.6",
+]
+# MCMC prebuilt — jax_tqdm decorates run_chain with per-chain progress bars
+# (the import is guarded; mcmc.py runs without it, just without progress).
+prebuilt-mcmc = [
+    "jax-tqdm>=0.4",
 ]
 # Notebook tutorials in docs/source/notebooks/.
 # Install via:   uv sync --group notebooks

@@ -55,10 +55,6 @@ class Schema:
         ))
         return cls(fields=items)
 
-    @classmethod
-    def empty(cls) -> "Schema":
-        return cls(fields=())
-
     # ── mapping-like surface ─────────────────────────────────────────
     @property
     def names(self) -> tuple[str, ...]:

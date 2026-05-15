@@ -41,7 +41,7 @@ from jax.scipy.linalg import cholesky
 
 from ..core.sweep import SweepFn, down, up
 from ..core.tree import Tree
-from ._gaussian_density import logphi
+from ._gaussian_density import canonical_leaf_messages
 from .sde import dot, dts, forward, solve
 
 
@@ -53,7 +53,7 @@ def backward_filter(
     v_T: jax.Array,
     F_T: jax.Array,
     H_T: jax.Array,
-    tildea0: jax.Array | None,
+    tildea0: jax.Array,
     tildeaT: jax.Array,
     *,
     B=None,
@@ -61,35 +61,21 @@ def backward_filter(
 ):
     """Backward filter over one SDE edge.
 
-    Propagates unnormalized canonical Gaussian parameters ``(c, F, H)``
-    backwards from the edge's lower end (subscript ``_T``, where the
-    child sits) to its upper end (subscript ``_0``, where the parent
-    sits).
-
-    Two paths:
-
-    - **Closed form** (``B is None and beta is None``): ``tildea(t)`` is
-      linearly interpolated between ``tildea0`` and ``tildeaT``;
-      ``Φ_inv(t) = I + H_T · ∫_t^T tildea(u) du`` has a clean analytic
-      form. Returns ``{c_0, F_0, H_0}``.
-    - **ODE path** (``B`` or ``beta`` callable provided): integrates
-      ``(H, F, c)`` via :func:`jax.experimental.ode.odeint`. Returns
-      ``{c_0, F_0, H_0, F_t, H_t}`` where ``F_t``/``H_t`` are the
-      per-step series needed by :func:`forward_guided`.
+    Propagates ``(c, F, H)`` from the edge's lower end (child) to its
+    upper end (parent). Closed form when ``B = β = None``; otherwise
+    integrates ``(H, F, c)`` via diffrax and additionally returns the
+    per-step ``F_t, H_t`` series needed by :func:`forward_guided`.
 
     Args:
-        dts: time discretization, shape ``(n_steps,)``. Assumed uniform
-            for the ODE path. Total edge time is ``T = dts.sum()``.
-        params: passed through to ``B``, ``beta`` (and the caller's ``a``).
+        dts: time discretization, shape ``(n_steps,)``. Total edge time is
+            ``T = dts.sum()``.
+        params: passed through to ``B``, ``beta``.
         c_T, v_T, F_T, H_T: canonical Gaussian parameters at the lower end.
         tildea0, tildeaT: ``(n, n)`` auxiliary diffusivity at ``t=0`` and
-            ``t=T``. ``tildea0=None`` defaults to constant ``tildeaT``.
+            ``t=T``; ``tildea(t)`` is linearly interpolated.
         B: optional ``(t, params) -> (n, n)`` linear drift matrix.
         beta: optional ``(t, params) -> (n,)`` affine drift offset.
     """
-    if tildea0 is None:
-        tildea0 = tildeaT
-
     if B is None and beta is None:
         return _backward_filter_closed_form(
             dts, c_T, v_T, F_T, H_T, tildea0, tildeaT
@@ -102,17 +88,8 @@ def backward_filter(
 def _backward_filter_closed_form(dts, c_T, v_T, F_T, H_T, tildea0, tildeaT):
     n = tildeaT.shape[0]
     d = v_T.size // n
-
-    if jnp.isscalar(c_T):
-        c_T = jnp.array([c_T])
-
     T = dts.sum()
-    # The linear closed-form Phi_inv comes from integrating
-    # ``∫_0^T tildea(u) du`` = (T²/(2T))·tildeaT + (T²/(2T))·tildea0 / 2
-    # … actually we want ∫_t^T tildea(u) du at t=0, which evaluates to
-    #   (T/2)·tildeaT + (T/2)·tildea0 for the interpolated case and
-    #   T·tildeaT in the constant case (both → (T/2)·(tildeaT+tildea0)
-    #   when tildea0 = tildeaT).
+    # ∫_0^T tildea(u) du = (T/2)·(tildeaT + tildea0) under linear interpolation.
     integrated = (T / 2.0) * tildeaT + (T / 2.0) * tildea0
     Phi_inv_0 = jnp.eye(n) + H_T @ integrated
 
@@ -159,9 +136,6 @@ def _backward_filter_ode(dts, params, c_T, v_T, F_T, H_T, tildea0, tildeaT, B, b
 
     nn = n * n
     nd = n * d
-
-    if jnp.isscalar(c_T):
-        c_T = jnp.array([c_T])
 
     def tildea(t):
         return tildeaT * (t / T) + tildea0 * (1 - t / T)
@@ -234,30 +208,18 @@ def forward_guided(
     H_T: jax.Array | None = None,
     F_t: jax.Array | None = None,
     H_t: jax.Array | None = None,
-    tildea0: jax.Array | None,
+    tildea0: jax.Array,
     tildeaT: jax.Array,
     B=None,
     beta=None,
 ):
     """Forward-guided SDE bridge.
 
-    Integrates the *guided* SDE ``dx = b(t,x) dt + a(x)·(F(t) - H(t)·x) dt +
-    σ(x) dW`` from ``x0`` over the edge. Two paths, mirroring
-    :func:`backward_filter`:
-
-    - **Closed form** (``B = β = None``, pass ``F_T``, ``H_T``): ``H(t)``
-      and ``F(t)`` are recovered analytically via the linearly-interpolated
-      Φ-inverse.
-    - **ODE path** (``B``/``β`` callable, pass ``F_t``, ``H_t``): the
-      per-step series from :func:`backward_filter` is indexed directly,
-      and the auxiliary drift ``tildeb(t, x) = β(t) + B(t)·x`` enters
-      the ``logpsi`` correction.
-
-    Returns ``(Xs, logpsi)``.
+    Integrates ``dx = b(t,x) dt + a(x)·(F(t) − H(t)·x) dt + σ(x) dW`` from
+    ``x0``. Closed form needs ``F_T, H_T``; the ODE path needs the
+    per-step ``F_t, H_t`` series from :func:`backward_filter`. Returns
+    ``(Xs, logpsi)``.
     """
-    if tildea0 is None:
-        tildea0 = tildeaT
-
     if B is None and beta is None:
         assert F_T is not None and H_T is not None, (
             "Closed-form forward_guided needs F_T and H_T"
@@ -498,25 +460,22 @@ def sde_down_conditional(
         tildea0 = a(node.v_0, params)
         tildeaT = a(node.v_T, params)
 
+        guide_kwargs: dict = {"tildea0": tildea0, "tildeaT": tildeaT}
         if B is None and beta is None:
-            Xs, logpsi = forward_guided(
-                x0, _dts, _dWs, b, sigma, params, a,
-                F_T=node.F_T, H_T=node.H_T,
-                tildea0=tildea0, tildeaT=tildeaT,
-            )
+            guide_kwargs["F_T"] = node.F_T
+            guide_kwargs["H_T"] = node.H_T
         else:
             # Re-derive F_t, H_t for this edge via the ODE filter.
             filt = backward_filter(
                 _dts, params, node.c_T, node.v_T, node.F_T, node.H_T,
-                tildea0=tildea0, tildeaT=tildeaT,
-                B=B, beta=beta,
+                tildea0=tildea0, tildeaT=tildeaT, B=B, beta=beta,
             )
-            Xs, logpsi = forward_guided(
-                x0, _dts, _dWs, b, sigma, params, a,
-                F_t=filt["F_t"], H_t=filt["H_t"],
-                tildea0=tildea0, tildeaT=tildeaT,
-                B=B, beta=beta,
+            guide_kwargs.update(
+                F_t=filt["F_t"], H_t=filt["H_t"], B=B, beta=beta,
             )
+        Xs, logpsi = forward_guided(
+            x0, _dts, _dWs, b, sigma, params, a, **guide_kwargs,
+        )
         return {"value": Xs, "logpsi": logpsi}
 
     return _sweep
@@ -558,24 +517,8 @@ def init_sde_leaves(
     leaf_mask = tree.topology.is_leaf
     n_leaves = int(leaf_mask.sum())
 
-    H_T_leaf = jnp.eye(n) / obs_var
-    H_T_leaves = jnp.broadcast_to(H_T_leaf, (n_leaves, n, n))
-    F_T_leaves = jax.vmap(lambda v: dot(H_T_leaf, v))(leaf_values)
-
-    Sigma_leaf = obs_var * jnp.eye(n)
-    c_T_leaves = jax.vmap(
-        lambda v: jax.vmap(
-            lambda vc: logphi(jnp.zeros(n), vc, Sigma_leaf)
-        )(v.reshape((n, d)).T)
-    )(leaf_values)
-
-    tree = tree.set_at(
-        leaf_mask,
-        H_T=H_T_leaves,
-        F_T=F_T_leaves,
-        c_T=c_T_leaves,
-        v_T=leaf_values,
-    )
+    msgs = canonical_leaf_messages(leaf_values, obs_var, n=n, d=d)
+    tree = tree.set_at(leaf_mask, **msgs, v_T=leaf_values)
 
     if root_value is not None:
         root_value = jnp.asarray(root_value)
@@ -584,8 +527,7 @@ def init_sde_leaves(
                 v_0=jnp.broadcast_to(root_value, (tree.size, n * d))
             )
         if "v_T" in tree.schema:
-            # Seed v_T everywhere with the root (will be overwritten at
-            # leaves and at inner nodes during the up sweep).
+            # Seed v_T at inner nodes (leaves keep their observed values).
             tree = tree.set_at(
                 ~leaf_mask,
                 v_T=jnp.broadcast_to(root_value, (tree.size - n_leaves, n * d)),

@@ -5,12 +5,8 @@ data, the state is ``n`` landmarks in ``R^d``, flattened to ``(n·d,)``.
 The dynamics are free Brownian motion with a *spatially correlated*
 diffusion: the covariance between landmarks is the kernel Gram matrix
 ``K_{ij} = k(x_i - x_j)``, applied tensor-product to ``I_d`` along the
-spatial axis. The :mod:`hyperiax.prebuilt.sde` ``dot`` / ``solve``
-helpers already operate on this tensor-product layout.
-
-These constructors aren't in the legacy ``examples/shape.py`` — that
-file only carried the kernels themselves. The drift and covariance
-were inlined in research notebooks. We collect them here for re-use.
+spatial axis. :mod:`hyperiax.prebuilt.sde`'s ``dot`` / ``solve`` already
+operate on this tensor-product layout.
 """
 
 from __future__ import annotations

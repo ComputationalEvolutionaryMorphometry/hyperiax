@@ -52,7 +52,7 @@ hyperiax/
 
 ## Contribution
 
-Contributions, issues and feature requests are welcome. Please refer to the [contributing guidelines](./CONTRIBUTION.md).
+Contributions, issues and feature requests are welcome — please open an issue or PR on GitHub.
 
 ## Contact
 

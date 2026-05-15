@@ -4,8 +4,6 @@ A :class:`SweepFn` carries a direction (``up`` / ``down``), the user
 function, and the explicit ``reads`` / ``writes`` declarations. It is
 ``frozen`` and hashable, so the dispatcher can use it as a JIT
 ``static_argnums`` and reuse compilations across calls.
-
-Stage 2: only ``@up`` is implemented. ``@down`` arrives in Stage 3.
 """
 
 from __future__ import annotations

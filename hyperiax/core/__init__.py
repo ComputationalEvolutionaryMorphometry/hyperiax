@@ -6,17 +6,12 @@ models, plotting, MCMC) lives outside ``hyperiax.core``.
 """
 
 from .builders import from_parents, symmetric_topology
-from .errors import (
-    HyperiaxError,
-    MissingField,
-    SchemaMismatch,
-    StructureMismatch,
-)
+from .errors import HyperiaxError, MissingField, SchemaMismatch
 from .schema import FieldSpec, Schema
 from .sweep import SweepFn, down, up
 from .topology import Topology
 from .tree import Tree
-from .views import Children, ChildrenAxis, Node, Parent
+from .views import Children, ChildrenAxis, Node
 
 __all__ = [
     "Children",
@@ -25,10 +20,8 @@ __all__ = [
     "HyperiaxError",
     "MissingField",
     "Node",
-    "Parent",
     "Schema",
     "SchemaMismatch",
-    "StructureMismatch",
     "SweepFn",
     "Topology",
     "Tree",

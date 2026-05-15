@@ -1,24 +1,10 @@
 """Backward Filtering + Forward Guiding for Gaussian transitions.
 
-A simplified-closed-form BFFG variant where every edge carries a
-Gaussian transition ``N(x_child | x_parent, edge_length · a(x_parent))``
-and every leaf carries an iid Gaussian observation
-``y_i ~ N(x_i, obs_var · I)``. Inner-node posteriors are obtained by an
-up-sweep that maintains ``(c_T, F_T, H_T)`` in the unnormalized
-canonical Gaussian form::
-
-    U(x | c, F, H) = exp(c - ½ xᵀHx + Fᵀx) .
-
-The math is ported essentially verbatim from the legacy
-``examples/ABFFG.py``; what's changed is the surface — instead of an
-``UpLambdaReducer`` with a hand-rolled ``transform`` and an explicit
-``reductions`` dict, the user gets a single :class:`SweepFn` produced
-by :func:`gaussian_up`.
-
-Currently equal-degree trees only (the up sweep follows the
-``@hx.up``/``vmap`` per-parent path; the unequal-degree
-``ChildrenAxis`` proxy doesn't yet expose the elementwise arithmetic
-this needs).
+Closed-form BFFG variant: each edge carries a Gaussian transition
+``N(x_child | x_parent, edge_length · a(x_parent))`` and each leaf an
+iid Gaussian observation ``y_i ~ N(x_i, obs_var · I)``. The up sweep
+maintains ``(c_T, F_T, H_T)`` in the unnormalized canonical form
+``U(x | c, F, H) = exp(c - ½ xᵀHx + Fᵀx)``. Equal-degree trees only.
 
 References
 ----------
@@ -38,7 +24,7 @@ from jax.scipy.linalg import cholesky
 
 from ..core.sweep import SweepFn, down, up
 from ..core.tree import Tree
-from ._gaussian_density import logphi, logphi_can
+from ._gaussian_density import canonical_leaf_messages, logphi
 from .sde import dot, solve
 
 
@@ -71,28 +57,27 @@ def gaussian_up(n: int, a, d: int = 1) -> SweepFn:
         #   children.F_T         : (k, n*d)
         #   children.H_T         : (k, n, n)
 
-        def per_child(edge_length, F_T_child, H_T_child):
-            var = edge_length
+        def per_child(edge_length, c_T_child, F_T_child, H_T_child):
             v_T = solve(H_T_child, F_T_child)
-            covar = var * a(v_T, params)
+            covar = edge_length * a(v_T, params)
             invPhi_0 = jnp.eye(n) + H_T_child @ covar
             H_0 = jnp.linalg.solve(invPhi_0, H_T_child)
             F_0 = solve(invPhi_0, F_T_child)
-            return F_0, H_0
+            # c_0 = c_T + 0.5 v_T^T (H_T - H_0) v_T - 0.5 log|invPhi_0|,
+            # per d-column. See van der Meulen & Sommer (2025) §3.
+            log_det_phi_inv = jnp.linalg.slogdet(invPhi_0)[1]
+            c_0 = jax.vmap(
+                lambda v_T_col, c_T_col: c_T_col
+                + 0.5 * v_T_col @ (H_T_child - H_0) @ v_T_col
+                - 0.5 * log_det_phi_inv,
+                in_axes=(1, 0),
+            )(v_T.reshape((n, d)), c_T_child)
+            return c_0, F_0, H_0
 
-        F_0s, H_0s = jax.vmap(per_child)(
-            children.edge_length, children.F_T, children.H_T
+        c_0s, F_0s, H_0s = jax.vmap(per_child)(
+            children.edge_length, children.c_T, children.F_T, children.H_T
         )
-        F_T = F_0s.sum(0)
-        H_T = H_0s.sum(0)
-        # Recompute c_T at the parent from the fused (F_T, H_T); the
-        # contributions of child_c_0 are absorbed into this normalization
-        # (see van der Meulen et al. §3 for the derivation).
-        c_T = jax.vmap(
-            lambda FT_col: logphi_can(jnp.zeros(n), FT_col, H_T),
-            in_axes=1,
-        )(F_T.reshape((n, d)))
-        return {"c_T": c_T, "F_T": F_T, "H_T": H_T}
+        return {"c_T": c_0s.sum(0), "F_T": F_0s.sum(0), "H_T": H_0s.sum(0)}
 
     return _sweep
 
@@ -121,27 +106,8 @@ def init_gaussian_leaves(
     Returns:
         A new Tree with the leaf rows of ``H_T``, ``F_T``, ``c_T`` set.
     """
-    leaf_mask = tree.topology.is_leaf
-    n_leaves = int(leaf_mask.sum())
-
-    H_T_leaf = jnp.eye(n) / obs_var
-    H_T_leaves = jnp.broadcast_to(H_T_leaf, (n_leaves, n, n))
-
-    F_T_leaves = jax.vmap(lambda v: dot(H_T_leaf, v))(leaf_values)
-
-    Sigma_leaf = obs_var * jnp.eye(n)
-    c_T_leaves = jax.vmap(
-        lambda v: jax.vmap(
-            lambda vc: logphi(jnp.zeros(n), vc, Sigma_leaf)
-        )(v.reshape((n, d)).T)  # iterate over the d data columns
-    )(leaf_values)
-
-    return tree.set_at(
-        leaf_mask,
-        H_T=H_T_leaves,
-        F_T=F_T_leaves,
-        c_T=c_T_leaves,
-    )
+    msgs = canonical_leaf_messages(leaf_values, obs_var, n=n, d=d)
+    return tree.set_at(tree.topology.is_leaf, **msgs)
 
 
 # ── conditional forward sampling (BFFG forward-guided) ─────────────

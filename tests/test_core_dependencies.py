@@ -1,11 +1,11 @@
-"""Architectural lint: ``hyperiax.core`` is L1 — no optional or heavy deps.
+"""Architectural lint: enforce the L1/L2 layering between subpackages.
 
-The whole point of layering is that ``import hyperiax.core`` works in any
-JAX environment with just ``jax`` and ``numpy`` installed. If anything
-in ``core/*.py`` ever ``import``s ete3, trimesh, matplotlib, scipy,
-tqdm, or flax, this test catches it.
+- L1 (``hyperiax.core``): no optional / heavy deps, no L2 imports.
+- L2 (``hyperiax.io``, ``hyperiax.prebuilt``): may import L1; must not
+  import each other; optional external deps must be lazy (function-local
+  import) so ``import hyperiax`` works with just JAX installed.
 
-Covers T-16.
+Covers T-16 plus the cross-package layering rules.
 """
 
 from __future__ import annotations
@@ -103,5 +103,89 @@ def test_core_only_imports_allowed_top_level_packages() -> None:
             )
     assert not offenders, (
         f"core/ may only import jax, numpy, hyperiax, or stdlib; found:\n"
+        + "\n".join(offenders)
+    )
+
+
+# ── L2 layering: io / prebuilt sibling isolation ───────────────────
+def _subpkg_files(subpkg: str) -> list[Path]:
+    here = Path(__file__).resolve().parent.parent
+    pkg_dir = here / "hyperiax" / subpkg
+    return sorted(pkg_dir.rglob("*.py")) if pkg_dir.is_dir() else []
+
+
+def test_io_does_not_import_prebuilt() -> None:
+    """``hyperiax.io`` must not depend on ``hyperiax.prebuilt`` (sibling L2)."""
+    offenders: list[str] = []
+    for path in _subpkg_files("io"):
+        for line_no, top, is_relative in _imports_in(path):
+            # Absolute import of hyperiax.prebuilt:
+            if not is_relative and top == "hyperiax":
+                # peek at full module name in the AST
+                src = path.read_text(encoding="utf-8")
+                tree = ast.parse(src, filename=str(path))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom) and node.lineno == line_no:
+                        if (node.module or "").startswith("hyperiax.prebuilt"):
+                            offenders.append(f"{path.name}:{line_no}: {node.module}")
+    assert not offenders, (
+        "io/ must not import from hyperiax.prebuilt:\n" + "\n".join(offenders)
+    )
+
+
+def test_prebuilt_does_not_import_io() -> None:
+    """``hyperiax.prebuilt`` must not depend on ``hyperiax.io`` (sibling L2)."""
+    offenders: list[str] = []
+    for path in _subpkg_files("prebuilt"):
+        for line_no, top, is_relative in _imports_in(path):
+            if not is_relative and top == "hyperiax":
+                src = path.read_text(encoding="utf-8")
+                tree = ast.parse(src, filename=str(path))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom) and node.lineno == line_no:
+                        if (node.module or "").startswith("hyperiax.io"):
+                            offenders.append(f"{path.name}:{line_no}: {node.module}")
+    assert not offenders, (
+        "prebuilt/ must not import from hyperiax.io:\n" + "\n".join(offenders)
+    )
+
+
+# Optional deps that must stay function-local (lazy) in L2 modules.
+LAZY_REQUIRED = ("ete3", "trimesh", "diffrax", "jax_tqdm")
+
+
+def _bare_top_level_imports(tree: ast.Module) -> list[ast.AST]:
+    """Module-level import statements *not* wrapped in try/except."""
+    return [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+
+
+def _imported_top_names(node: ast.AST) -> list[str]:
+    if isinstance(node, ast.Import):
+        return [alias.name.split(".", 1)[0] for alias in node.names]
+    if isinstance(node, ast.ImportFrom):
+        return [(node.module or "").split(".", 1)[0]]
+    return []
+
+
+@pytest.mark.parametrize("forbidden", LAZY_REQUIRED)
+def test_l2_does_not_import_optional_deps_at_module_top(forbidden: str) -> None:
+    """Optional external deps must not be bare module-level imports — that
+    would break ``import hyperiax`` for users without the relevant extra.
+
+    Acceptable forms: (a) function-local import; (b) module-level import
+    inside a ``try / except ImportError`` block (the ``prebuilt/mcmc.py``
+    pattern, where ``run_chain`` degrades gracefully without ``jax_tqdm``).
+    """
+    paths = _subpkg_files("io") + _subpkg_files("prebuilt")
+    offenders: list[str] = []
+    for path in paths:
+        src = path.read_text(encoding="utf-8")
+        tree = ast.parse(src, filename=str(path))
+        for node in _bare_top_level_imports(tree):
+            if forbidden in _imported_top_names(node):
+                offenders.append(f"{path.relative_to(path.parents[2])}:{node.lineno}")
+    assert not offenders, (
+        f"L2 modules must lazy-import {forbidden!r} (function-local or "
+        f"try/except-guarded). Found unguarded top-level imports at:\n"
         + "\n".join(offenders)
     )

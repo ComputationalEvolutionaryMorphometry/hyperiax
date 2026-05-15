@@ -1,10 +1,7 @@
 """Tree — Topology + Schema + a dict of per-node arrays.
 
-The :class:`Tree` is immutable and registered as a JAX pytree. Sweeps and
-other transforms return a *new* Tree rather than mutating in place; this is
-what makes ``@jax.jit`` and ``jax.lax.scan`` compose with hyperiax cleanly
-(the old in-place ``tree.data = {...}`` pattern was the source of leaked
-tracers when an outer ``train_step`` was JIT-compiled).
+Immutable, JAX-pytree-registered: every mutator returns a new Tree, so
+the Tree composes cleanly with ``@jax.jit`` and ``jax.lax.scan``.
 """
 
 from __future__ import annotations
@@ -105,10 +102,7 @@ class Tree:
             ) from None
 
     def __getattr__(self, name: str) -> jax.Array:
-        # ``__getattr__`` is only called after normal attribute lookup misses,
-        # so dataclass fields (topology, schema, data) and methods are unaffected.
-        # Underscore-prefixed names are kept out to avoid recursing into
-        # pytree / dataclass machinery during unpickling, repr, etc.
+        # Underscore names bail early to avoid pickle/repr/pytree recursion.
         if name.startswith("_"):
             raise AttributeError(name)
         try:

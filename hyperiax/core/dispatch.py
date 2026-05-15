@@ -2,13 +2,10 @@
 
 The dispatcher walks a Tree's levels in the right order, builds per-level
 :class:`Node`/:class:`Children` views over sliced/gathered JAX arrays,
-calls the user's sweep function under :func:`jax.vmap` (so the function
-sees one parent at a time), and scatters the writes back into a new data
+calls the user's sweep function (under :func:`jax.vmap` for the down sweep
+and the equal-degree up sweep), and scatters the writes into a new data
 dict. The whole thing is a pure ``Tree -> Tree`` function so it composes
 with ``jax.jit`` and ``jax.lax.scan`` without leaking state.
-
-Stage 2 implements the equal-degree up-sweep only. Stage 3 adds down. Stage 4
-adds the unequal-degree segment-reduction path with a ``ChildrenAxis`` proxy.
 """
 
 from __future__ import annotations
@@ -50,13 +47,35 @@ def up_dispatch(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
 def down_dispatch(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
     """Run a down-sweep on a Tree. Returns a new Tree.
 
-    Works for arbitrary topologies — the down direction does not need the
-    equal-degree fast path because every non-root node has exactly one
-    parent. The dispatcher slices the level contiguously and gathers parent
-    data via ``topo.parents``.
+    Works for arbitrary topologies — every non-root node has exactly one
+    parent, so the dispatcher slices each level contiguously and gathers
+    the parent record via ``topo.parents``.
     """
     _validate_schema(sweep, tree)
     return _down_dispatch_jit(sweep, tree, params, key)
+
+
+# ── shared helpers ─────────────────────────────────────────────────
+def _resolve_reads(
+    sweep_reads: tuple | None,
+    sweep_other_reads: tuple | None,
+    schema_names: tuple,
+) -> tuple[tuple, tuple, frozenset]:
+    """Resolve ``reads_self``, ``reads_other``, and ``expected_writes`` for a sweep."""
+    reads_self = sweep_reads if sweep_reads is not None else schema_names
+    reads_other = sweep_other_reads if sweep_other_reads is not None else schema_names
+    return reads_self, reads_other
+
+
+def _check_writes(out, expected: frozenset, declared: tuple, *, direction: str) -> None:
+    got = frozenset(out)
+    if got != expected:
+        extra = sorted(got - expected)
+        missing = sorted(expected - got)
+        raise SchemaMismatch(
+            f"{direction} returned keys {sorted(got)} but writes={sorted(declared)}. "
+            f"Extra: {extra}; missing: {missing}."
+        )
 
 
 # ── equal-degree up dispatch ────────────────────────────────────────
@@ -71,16 +90,15 @@ def _up_dispatch_equal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
     """
     topo = tree.topology
     data = dict(tree.data)
-
-    schema_names = tuple(name for name, _ in tree.schema.fields)
-    reads_self = sweep.reads if sweep.reads is not None else schema_names
-    reads_children = sweep.reads_children if sweep.reads_children is not None else schema_names
+    reads_self, reads_children = _resolve_reads(
+        sweep.reads, sweep.reads_children, tree.schema.names,
+    )
     expected_writes = frozenset(sweep.writes)
 
-    def _per_parent(node_d, children_d, params_):
-        return sweep.fn(Node(node_d), Children(children_d), params_)
-
-    per_level = jax.vmap(_per_parent, in_axes=(0, 0, None))
+    per_level = jax.vmap(
+        lambda nd, cd, p: sweep.fn(Node(nd), Children(cd), p),
+        in_axes=(0, 0, None),
+    )
 
     for level in range(topo.depth - 1, -1, -1):
         non_leaf = topo.level_non_leaf_indices[level]
@@ -88,7 +106,7 @@ def _up_dispatch_equal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
             continue
 
         self_idx = jnp.asarray(non_leaf)
-        child_idx = jnp.asarray(topo.gather_child_idx[non_leaf])  # (scope, k)
+        child_idx = jnp.asarray(topo.gather_child_idx[non_leaf])
 
         node_data = {k: data[k][self_idx] for k in reads_self}
         children_data = {k: data[k][child_idx] for k in reads_children}
@@ -111,31 +129,21 @@ def _up_dispatch_unequal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
     into a flat ``(M_total, *trailing)`` view and assigned segment ids via
     ``topo.pbuckets``. The user's ``children.X.sum(0)`` (or .max/.mean/...)
     dispatches to the corresponding ``jax.ops.segment_*`` through a
-    :class:`ChildrenAxis` proxy.
-
-    User code is *not* vmapped here: ``node.value`` is
-    ``(num_parents_at_level, *trailing)`` and proxy reductions return
-    ``(num_parents_at_level, *trailing)`` too — they line up naturally.
+    :class:`ChildrenAxis` proxy. No vmap is needed — proxy reductions
+    return per-parent shape ``(num_parents, *trailing)`` directly.
     """
     topo = tree.topology
     data = dict(tree.data)
-
-    schema_names = tuple(name for name, _ in tree.schema.fields)
-    reads_self = sweep.reads if sweep.reads is not None else schema_names
-    reads_children = sweep.reads_children if sweep.reads_children is not None else schema_names
+    reads_self, reads_children = _resolve_reads(
+        sweep.reads, sweep.reads_children, tree.schema.names,
+    )
     expected_writes = frozenset(sweep.writes)
     schema = tree.schema
 
-    # Iterate parent levels from depth-1 down to root. Each iteration
-    # processes the children at level L+1 and writes results into the
-    # (unique) parents at level L given by pbuckets_ref[L+1].
     for level in range(topo.depth - 1, -1, -1):
         child_ls = int(topo.level_starts[level + 1])
         child_le = int(topo.level_starts[level + 2])
-        if child_le == child_ls:
-            continue
-
-        parent_ids = topo.pbuckets_ref[level + 1]  # numpy
+        parent_ids = topo.pbuckets_ref[level + 1]
         num_segments = int(parent_ids.size)
         if num_segments == 0:
             continue
@@ -163,41 +171,27 @@ def _up_dispatch_unequal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
     return Tree(topology=topo, schema=tree.schema, data=data)
 
 
-def _check_writes(out, expected: frozenset, declared: tuple, *, direction: str) -> None:
-    got = frozenset(out)
-    if got != expected:
-        extra = sorted(got - expected)
-        missing = sorted(expected - got)
-        raise SchemaMismatch(
-            f"{direction} returned keys {sorted(got)} but writes={sorted(declared)}. "
-            f"Extra: {extra}; missing: {missing}."
-        )
-
-
+# ── down dispatch ──────────────────────────────────────────────────
 @partial(jax.jit, static_argnums=(0,))
 def _down_dispatch_jit(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
     topo = tree.topology
     data = dict(tree.data)
-
-    schema_names = tuple(name for name, _ in tree.schema.fields)
-    reads_self = sweep.reads if sweep.reads is not None else schema_names
-    reads_parent = sweep.reads_parent if sweep.reads_parent is not None else schema_names
+    reads_self, reads_parent = _resolve_reads(
+        sweep.reads, sweep.reads_parent, tree.schema.names,
+    )
     expected_writes = frozenset(sweep.writes)
 
-    # User function is per-node under jax.vmap:
-    #   node.value   : (*trailing,)
-    #   parent.value : (*trailing,)
-    def _per_node(node_d, parent_d, params_):
-        return sweep.fn(Node(node_d), Parent(parent_d), params_)
+    per_level = jax.vmap(
+        lambda nd, pd, p: sweep.fn(Node(nd), Parent(pd), p),
+        in_axes=(0, 0, None),
+    )
 
-    per_level = jax.vmap(_per_node, in_axes=(0, 0, None))
-
-    # Walk levels root → leaves, starting at level 1 (root has no parent).
+    # Walk root → leaves; level 1 is first (the root has no parent).
     for level in range(1, topo.depth + 1):
         ls = int(topo.level_starts[level])
         le = int(topo.level_starts[level + 1])
 
-        parent_indices = jnp.asarray(topo.parents[ls:le])  # (scope,)
+        parent_indices = jnp.asarray(topo.parents[ls:le])
 
         node_data = {k: data[k][ls:le] for k in reads_self}
         parent_data = {k: data[k][parent_indices] for k in reads_parent}

@@ -56,5 +56,6 @@ def test_schema_without_drops_fields():
 
 
 def test_schema_empty():
-    assert Schema.empty().names == ()
-    assert len(Schema.empty()) == 0
+    s = Schema.from_dict({})
+    assert s.names == ()
+    assert len(s) == 0

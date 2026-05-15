@@ -50,13 +50,8 @@ def read(
         float32) plus any extras requested.
     """
     ete3 = _require_ete3()
-
-    src_str = str(source)
-    if isinstance(source, Path) or not _looks_like_newick_literal(src_str):
-        ete_tree = ete3.Tree(src_str, format=newick_format)
-    else:
-        ete_tree = ete3.Tree(src_str, format=newick_format)
-
+    # ete3.Tree accepts both Newick literals and file paths through the same ctor.
+    ete_tree = ete3.Tree(str(source), format=newick_format)
     parents, names, edge_lengths = _ete_to_bfs_arrays(ete_tree)
     topo = Topology.from_parents(parents, names=names)
 
@@ -128,11 +123,6 @@ def _require_ete3():
             "or `pip install 'hyperiax[io]'`."
         ) from e
     return ete3
-
-
-def _looks_like_newick_literal(s: str) -> bool:
-    """Heuristic: a string ending in `;` is a Newick literal, otherwise a path."""
-    return s.rstrip().endswith(";")
 
 
 def _ete_to_bfs_arrays(

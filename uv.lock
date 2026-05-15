@@ -671,7 +671,6 @@ dependencies = [
 [package.optional-dependencies]
 io = [
     { name = "ete3" },
-    { name = "six" },
 ]
 notebooks = [
     { name = "diffrax" },
@@ -684,6 +683,9 @@ notebooks = [
 ]
 prebuilt-bffg = [
     { name = "diffrax" },
+]
+prebuilt-mcmc = [
+    { name = "jax-tqdm" },
 ]
 prebuilt-shape = [
     { name = "trimesh" },
@@ -703,16 +705,16 @@ requires-dist = [
     { name = "ipykernel", marker = "extra == 'notebooks'", specifier = ">=6.29" },
     { name = "jax", specifier = ">=0.4.30" },
     { name = "jax-tqdm", marker = "extra == 'notebooks'", specifier = ">=0.4" },
+    { name = "jax-tqdm", marker = "extra == 'prebuilt-mcmc'", specifier = ">=0.4" },
     { name = "jaxlib", specifier = ">=0.4.30" },
     { name = "joblib", marker = "extra == 'notebooks'", specifier = ">=1.4" },
     { name = "jupyter", marker = "extra == 'notebooks'", specifier = ">=1.0" },
     { name = "matplotlib", marker = "extra == 'notebooks'", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "optax", marker = "extra == 'notebooks'", specifier = ">=0.2" },
-    { name = "six", marker = "extra == 'io'" },
     { name = "trimesh", marker = "extra == 'prebuilt-shape'", specifier = ">=4.0" },
 ]
-provides-extras = ["io", "prebuilt-shape", "prebuilt-bffg", "notebooks"]
+provides-extras = ["io", "prebuilt-shape", "prebuilt-bffg", "prebuilt-mcmc", "notebooks"]
 
 [package.metadata.requires-dev]
 dev = [

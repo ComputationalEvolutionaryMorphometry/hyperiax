@@ -1,29 +1,9 @@
 """MCMC building blocks: Metropolis-Hastings on arbitrary JAX pytrees.
 
-State-agnostic by design: an MCMC state is just a pytree (a :class:`Tree`,
-a dict, a tuple, nested combinations — anything :mod:`jax.tree_util`
-recognizes). The engine does not distinguish "latent state" from
-"hyperparameter"; both flow through the same machinery, and joint
-inference is "make state a dict of both."
-
-API
----
-- :class:`MHState`: ``(position, log_target)`` carried through the chain so
-  each step only needs one fresh log-density evaluation.
-- :func:`init_state`: evaluate the log-target once at the starting position.
-- :func:`metropolis_step`: one symmetric Metropolis-Hastings update.
-- :func:`run_chain`: drive a chain of N kernel steps via :func:`jax.lax.scan`.
-- :func:`random_walk_proposal`: Gaussian random walk applied uniformly to
-  every pytree leaf.
-- :func:`crank_nicolson_proposal`: preconditioned Crank-Nicolson proposer
-  for Gaussian-prior states (preserves the prior, so the acceptance ratio
-  collapses to the likelihood ratio).
-
-Constraints (e.g. ``σ² > 0``) are deliberately not built in. Propose in
-the unconstrained space (e.g. on ``log_sigma``), recover the constrained
-value inside ``log_target_fn`` (``jnp.exp(log_sigma)``), and add the
-change-of-variables Jacobian term yourself. See notebook 05 for a worked
-example.
+The state is any pytree the kernel can transport; the engine does not
+distinguish latent state from hyperparameters. Constraints (e.g.
+``σ² > 0``) are not built in — propose in the unconstrained space and
+fold any change-of-variables Jacobian into ``log_target_fn``.
 """
 
 from __future__ import annotations
@@ -58,12 +38,6 @@ class MHState:
 
     position: Any
     log_target: jax.Array
-
-    def __repr__(self) -> str:
-        return (
-            f"MHState(log_target={float(self.log_target):.4f}, "
-            f"position={type(self.position).__name__})"
-        )
 
 
 # Register as a JAX pytree so it can ride through ``lax.scan`` as carry.
@@ -142,74 +116,30 @@ def run_chain(
     *,
     savef: Callable[[MHState], Any] | None = None,
 ) -> tuple[Any, dict]:
-    """Drive a chain of ``n_steps`` kernel updates via :func:`jax.lax.scan`.
-
-    The whole loop compiles to a single XLA program — calling
-    ``run_chain`` repeatedly with the same kernel hits the JIT cache.
+    """Drive ``n_steps`` kernel updates via :func:`jax.lax.scan`.
 
     Args:
         key: PRNG key.
         init: initial :class:`MHState`. Build with :func:`init_state`.
-        kernel_fn: ``(key, state) -> (new_state, info)``. Common usage::
-
-                from functools import partial
-                kernel = partial(metropolis_step,
-                                 propose_fn=random_walk_proposal(0.5),
-                                 log_target_fn=log_target_fn)
-
-            For Gibbs-like multi-block schemes, write your own::
-
-                def kernel(key, state):
-                    k1, k2 = jax.random.split(key)
-                    state, i1 = metropolis_step(k1, state, prop_block_1, log_target_fn)
-                    state, i2 = metropolis_step(k2, state, prop_block_2, log_target_fn)
-                    return state, {"acc_1": i1["accepted"], "acc_2": i2["accepted"]}
+        kernel_fn: ``(key, state) -> (new_state, info)``. Typically
+            ``partial(metropolis_step, propose_fn=..., log_target_fn=...)``;
+            for Gibbs-like schemes, write a kernel that composes multiple
+            ``metropolis_step`` calls.
         n_steps: number of kernel calls.
-        savef: optional projection ``MHState -> small_pytree`` applied at
-            every step before stacking into the trace. ``None`` (default)
-            stacks the entire :class:`MHState`, which is fine for cheap
-            positions but memory-heavy when the position contains big
-            arrays (e.g. SDE noise fields). Pass e.g.
-            ``savef=lambda s: s.position['log_params']`` to keep only the
-            small subset you actually want to plot.
+        savef: optional projection ``MHState -> small_pytree`` applied per
+            step before stacking — keeps the trace small when the position
+            contains big arrays. Default stacks the full :class:`MHState`.
 
     Returns:
-        ``(trace, info)``. With ``savef=None`` the trace is an
-        :class:`MHState` whose leaves carry leading axis ``n_steps``. With
-        a ``savef`` the trace is whatever ``savef`` returned, stacked
-        along a leading axis of length ``n_steps``. ``info`` is the
-        stacked dict of per-step diagnostics from the kernel; acceptance
-        rate is ``float(info["accepted"].mean())``.
-
-    Multi-chain via ``jax.vmap``:
-        When ``jax_tqdm`` is installed, ``run_chain`` works under
-        ``jax.vmap`` with one progress bar per chain. Wrap each chain's
-        ``MHState`` with ``jax_tqdm.PBar(id=chain_id, carry=mh_state)``;
-        ``run_chain`` itself needs no changes. Typical pattern::
-
-            from jax_tqdm import PBar
-
-            inits = jax.vmap(lambda x: init_state(x, log_target))(init_positions)
-            init_pbars = jax.vmap(lambda i, c: PBar(id=i, carry=c))(
-                jnp.arange(n_chains), inits,
-            )
-            keys = jax.random.split(rng, n_chains)
-            run_multi = jax.jit(jax.vmap(
-                lambda k, init: run_chain(k, init, kernel_fn, n_steps=N, savef=saver),
-            ))
-            traces, infos = run_multi(keys, init_pbars)
-
-        Returned ``traces`` / ``infos`` carry an extra leading
-        ``(n_chains,)`` axis. Each chain's progress bar is identified by
-        the contiguous integer index in ``PBar.id``.
+        ``(trace, info)`` with leading axis ``n_steps``. Composes under
+        ``jax.vmap`` for multi-chain runs; wrap each chain's state in
+        ``jax_tqdm.PBar(id=i, carry=...)`` for per-chain progress bars.
     """
     keys = jax.random.split(key, n_steps)
     save = savef if savef is not None else (lambda s: s)
 
-    # jax_tqdm requires the scan xs to expose the iteration index as either
-    # the whole x (scalar int) or the first element of a tuple. We always
-    # pair ``jnp.arange(n_steps)`` with the PRNG keys and unpack inside so
-    # the body shape is the same whether or not the tqdm decoration applies.
+    # jax_tqdm reads the iteration index off the first element of xs;
+    # we pair (arange, keys) so the body shape is unconditional.
     def body(state, x):
         _iter, key = x
         new_state, info = kernel_fn(key, state)
@@ -224,67 +154,38 @@ def run_chain(
 
 
 # ── pre-built proposers ────────────────────────────────────────────
-def random_walk_proposal(scale: float) -> Callable[[jax.Array, Any], Any]:
-    """Gaussian random-walk proposer with uniform scale per pytree leaf.
-
-    Each leaf ``x`` is perturbed independently: ``x' = x + scale · ε``,
-    ``ε ~ N(0, I)``. For per-leaf scales, write your own ``propose_fn``.
-
-    Args:
-        scale: standard deviation of the additive Gaussian step.
-
-    Returns:
-        ``(key, position) -> new_position``.
-    """
+def _per_leaf_proposal(
+    leaf_step: Callable[[jax.Array, jax.Array], jax.Array],
+) -> Callable[[jax.Array, Any], Any]:
+    """Wrap a per-leaf ``(noise, x) -> x'`` rule into a pytree proposer."""
     def propose(key: jax.Array, position: Any) -> Any:
         leaves, treedef = jax.tree.flatten(position)
         keys = jax.random.split(key, max(1, len(leaves)))
         new_leaves = [
-            x + scale * jax.random.normal(
-                k, jnp.shape(x), dtype=jnp.result_type(x, jnp.float32)
+            leaf_step(
+                jax.random.normal(
+                    k, jnp.shape(x), dtype=jnp.result_type(x, jnp.float32)
+                ),
+                x,
             )
             for k, x in zip(keys, leaves)
         ]
         return jax.tree.unflatten(treedef, new_leaves)
     return propose
+
+
+def random_walk_proposal(scale: float) -> Callable[[jax.Array, Any], Any]:
+    """Gaussian random-walk proposer: per leaf ``x' = x + scale · ε``."""
+    return _per_leaf_proposal(lambda eps, x: x + scale * eps)
 
 
 def crank_nicolson_proposal(beta: float) -> Callable[[jax.Array, Any], Any]:
-    """Preconditioned Crank-Nicolson proposer for Gaussian-prior states.
+    """Preconditioned Crank-Nicolson proposer for standard-Gaussian-prior leaves.
 
-    Updates each pytree leaf as
-
-        x' = √(1 - β²) · x + β · ε,   ε ~ N(0, I),
-
-    which preserves the standard-normal prior on ``x`` exactly. The
-    Metropolis acceptance therefore reduces to the *likelihood* ratio —
-    you do not need a separate prior or Jacobian term in your
-    ``log_target_fn``. This is the standard mover for the latent noise
-    field of an SDE bridge under BFFG.
-
-    Args:
-        beta: step size in ``[0, 1]``. ``β = 0`` is no move; ``β = 1`` is
-            iid resampling. Typical good values are 0.01–0.1; tune for
-            ~25-40% acceptance rate.
-
-    Returns:
-        ``(key, position) -> new_position``.
-
-    Note:
-        Assumes each leaf is a-priori standard normal with as many iid
-        entries as its shape. For non-Gaussian priors, use
-        :func:`random_walk_proposal` and include the prior in ``log_target_fn``.
+    Per leaf ``x' = √(1 - β²) · x + β · ε``, which preserves the
+    ``N(0, I)`` prior exactly — Metropolis acceptance then reduces to the
+    pure likelihood ratio (no prior / Jacobian terms needed). Good ``β`` is
+    0.01–0.1; tune for ~25–40% acceptance.
     """
     scale_old = jnp.sqrt(1.0 - beta ** 2)
-
-    def propose(key: jax.Array, position: Any) -> Any:
-        leaves, treedef = jax.tree.flatten(position)
-        keys = jax.random.split(key, max(1, len(leaves)))
-        new_leaves = [
-            scale_old * x + beta * jax.random.normal(
-                k, jnp.shape(x), dtype=jnp.result_type(x, jnp.float32)
-            )
-            for k, x in zip(keys, leaves)
-        ]
-        return jax.tree.unflatten(treedef, new_leaves)
-    return propose
+    return _per_leaf_proposal(lambda eps, x: scale_old * x + beta * eps)

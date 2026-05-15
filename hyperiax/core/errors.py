@@ -11,7 +11,3 @@ class SchemaMismatch(HyperiaxError):
 
 class MissingField(HyperiaxError):
     """A sweep or tree access references a name not in the tree's schema."""
-
-
-class StructureMismatch(HyperiaxError):
-    """Two pytrees that should share structure (topology / schema) do not."""
