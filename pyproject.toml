@@ -35,10 +35,21 @@ io = [
 prebuilt-shape = [
     "trimesh>=4.0",
 ]
-# SDE / BFFG prebuilt models — diffrax powers the ODE-integrated backward
+# BFFG prebuilt models — diffrax powers the ODE-integrated backward
 # filter; the closed-form path doesn't need it.
 prebuilt-bffg = [
     "diffrax>=0.6",
+]
+# Notebook tutorials in docs/source/notebooks/.
+# Install via:   uv sync --group notebooks
+notebooks = [
+    "matplotlib>=3.8",
+    "jupyter>=1.0",
+    "ipykernel>=6.29",
+    "diffrax>=0.6",
+    "jax-tqdm>=0.4",
+    "joblib>=1.4",
+    "optax>=0.2",
 ]
 
 [project.urls]
