@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 # ── public entrypoints ──────────────────────────────────────────────
-def up_dispatch(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
+def up_dispatch(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     """Run an up-sweep on a Tree. Returns a new Tree.
 
     Picks one of two internal paths based on the topology:
@@ -44,7 +44,7 @@ def up_dispatch(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
     return _up_dispatch_unequal(sweep, tree, params, key)
 
 
-def down_dispatch(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
+def down_dispatch(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     """Run a down-sweep on a Tree. Returns a new Tree.
 
     Works for arbitrary topologies — every non-root node has exactly one
@@ -80,7 +80,7 @@ def _check_writes(out, expected: frozenset, declared: tuple, *, direction: str) 
 
 # ── equal-degree up dispatch ────────────────────────────────────────
 @partial(jax.jit, static_argnums=(0,))
-def _up_dispatch_equal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
+def _up_dispatch_equal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     """Up sweep on a tree where every non-leaf has the same arity.
 
     Each level builds a dense ``(scope, k, *trailing)`` children array via
@@ -91,7 +91,9 @@ def _up_dispatch_equal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
     topo = tree.topology
     data = dict(tree.data)
     reads_self, reads_children = _resolve_reads(
-        sweep.reads, sweep.reads_children, tree.schema.names,
+        sweep.reads,
+        sweep.reads_children,
+        tree.schema.names,
     )
     expected_writes = frozenset(sweep.writes)
 
@@ -122,7 +124,7 @@ def _up_dispatch_equal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
 
 # ── unequal-degree up dispatch (segment-reduction path) ────────────
 @partial(jax.jit, static_argnums=(0,))
-def _up_dispatch_unequal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
+def _up_dispatch_unequal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     """Up sweep on a tree with ragged arity.
 
     At each parent level, the children one level deeper are concatenated
@@ -135,7 +137,9 @@ def _up_dispatch_unequal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
     topo = tree.topology
     data = dict(tree.data)
     reads_self, reads_children = _resolve_reads(
-        sweep.reads, sweep.reads_children, tree.schema.names,
+        sweep.reads,
+        sweep.reads_children,
+        tree.schema.names,
     )
     expected_writes = frozenset(sweep.writes)
     schema = tree.schema
@@ -173,11 +177,13 @@ def _up_dispatch_unequal(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
 
 # ── down dispatch ──────────────────────────────────────────────────
 @partial(jax.jit, static_argnums=(0,))
-def _down_dispatch_jit(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
+def _down_dispatch_jit(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     topo = tree.topology
     data = dict(tree.data)
     reads_self, reads_parent = _resolve_reads(
-        sweep.reads, sweep.reads_parent, tree.schema.names,
+        sweep.reads,
+        sweep.reads_parent,
+        tree.schema.names,
     )
     expected_writes = frozenset(sweep.writes)
 
@@ -206,7 +212,7 @@ def _down_dispatch_jit(sweep: "SweepFn", tree: Tree, params, key) -> Tree:
 
 
 # ── validation (runs eagerly, outside the jit-cached body) ─────────
-def _validate_schema(sweep: "SweepFn", tree: Tree) -> None:
+def _validate_schema(sweep: SweepFn, tree: Tree) -> None:
     """Check that every field referenced by the sweep exists in the schema.
 
     Runs eagerly so the error message has a clean Python traceback to the

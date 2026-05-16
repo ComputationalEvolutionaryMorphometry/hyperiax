@@ -55,6 +55,7 @@ def forward(x, dts, dWs, b, sigma, params, a=None) -> jax.Array:
         Trajectory ``Xs`` of shape ``(n_steps + 1, n·d)`` including the
         initial state at index 0.
     """
+
     def SDE(carry, val):
         t, X = carry
         dt, dW = val
@@ -62,8 +63,10 @@ def forward(x, dts, dWs, b, sigma, params, a=None) -> jax.Array:
             Xtp1 = X + b(t, X, params) * dt + dot(sigma(X, params), dW)
         else:
             assert a is not None, "either sigma or a must be provided"
-            Xtp1 = X + b(t, X, params) * dt + dot(
-                cholesky(a(X, params), lower=True, check_finite=False), dW
+            Xtp1 = (
+                X
+                + b(t, X, params) * dt
+                + dot(cholesky(a(X, params), lower=True, check_finite=False), dW)
             )
         return ((t + dt, Xtp1), (t, X))
 

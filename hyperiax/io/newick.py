@@ -18,8 +18,8 @@ Layout decisions
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 import jax.numpy as jnp
 import numpy as np
@@ -33,7 +33,7 @@ from ..core.tree import Tree
 def read(
     source: str | Path,
     *,
-    schema: Schema | Mapping[str, "tuple | FieldSpec | None"] | None = None,
+    schema: Schema | Mapping[str, tuple | FieldSpec | None] | None = None,
     newick_format: int = 1,
 ) -> Tree:
     """Read a Newick tree (literal or file path) into a hyperiax :class:`Tree`.

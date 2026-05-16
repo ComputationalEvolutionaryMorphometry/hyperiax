@@ -102,4 +102,3 @@ Ready-to-use sweeps and helpers for common message-passing tasks.
    hyperiax.prebuilt.run_chain
    hyperiax.prebuilt.random_walk_proposal
    hyperiax.prebuilt.crank_nicolson_proposal
-

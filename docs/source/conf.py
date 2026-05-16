@@ -24,12 +24,12 @@ version = ".".join(release.split(".")[:2])
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
-    "sphinx.ext.napoleon",          # Google / NumPy docstring styles
+    "sphinx.ext.napoleon",  # Google / NumPy docstring styles
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
-    "sphinx_autodoc_typehints",     # render type hints inline
-    "sphinx_copybutton",            # copy-to-clipboard on code blocks
-    "myst_nb",                      # MyST markdown + notebook rendering
+    "sphinx_autodoc_typehints",  # render type hints inline
+    "sphinx_copybutton",  # copy-to-clipboard on code blocks
+    "myst_nb",  # MyST markdown + notebook rendering
 ]
 
 autosummary_generate = True

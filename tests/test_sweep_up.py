@@ -2,7 +2,6 @@
 (jit cache hit on structurally-identical trees).
 """
 
-import jax
 import jax.numpy as jnp
 import pytest
 
@@ -167,6 +166,7 @@ def test_up_sweep_raises_on_extra_writes():
 
 def test_up_decorator_requires_nonempty_writes():
     with pytest.raises(ValueError):
+
         @up(writes=())
         def empty(node, children, params):
             return {}
@@ -176,7 +176,10 @@ def test_sweepfn_rejects_parent_reads_on_up_direction():
     """SweepFn (the internal primitive) refuses parent-reads on up sweeps."""
     with pytest.raises(ValueError):
         hx.SweepFn(
-            direction="up", fn=lambda *a: {"value": None},
-            reads=None, reads_children=None,
-            reads_parent=("value",), writes=("value",),
+            direction="up",
+            fn=lambda *a: {"value": None},
+            reads=None,
+            reads_children=None,
+            reads_parent=("value",),
+            writes=("value",),
         )

@@ -10,8 +10,8 @@ up front via :meth:`Tree.empty`.
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from typing import Iterator, Mapping
 
 import jax.numpy as jnp
 import numpy as np
@@ -25,7 +25,7 @@ class FieldSpec:
     dtype: np.dtype = jnp.float32
 
     @staticmethod
-    def _coerce(spec) -> "FieldSpec":
+    def _coerce(spec) -> FieldSpec:
         """Coerce a ``FieldSpec``, a shape tuple, or ``None`` into a ``FieldSpec``."""
         if isinstance(spec, FieldSpec):
             return spec
@@ -49,10 +49,8 @@ class Schema:
 
     # ── construction ──────────────────────────────────────────────────
     @classmethod
-    def from_dict(cls, d: Mapping[str, "tuple | FieldSpec | None"]) -> "Schema":
-        items = tuple(sorted(
-            (name, FieldSpec._coerce(spec)) for name, spec in d.items()
-        ))
+    def from_dict(cls, d: Mapping[str, tuple | FieldSpec | None]) -> Schema:
+        items = tuple(sorted((name, FieldSpec._coerce(spec)) for name, spec in d.items()))
         return cls(fields=items)
 
     # ── mapping-like surface ─────────────────────────────────────────
@@ -83,7 +81,7 @@ class Schema:
         return hash(self.fields)
 
     # ── functional updates ───────────────────────────────────────────
-    def with_added(self, **extra) -> "Schema":
+    def with_added(self, **extra) -> Schema:
         """Return a new Schema with extra fields appended. Raises if a name collides."""
         merged = dict(self.fields)
         for name, spec in extra.items():
@@ -92,7 +90,7 @@ class Schema:
             merged[name] = FieldSpec._coerce(spec)
         return Schema.from_dict(merged)
 
-    def without(self, *names: str) -> "Schema":
+    def without(self, *names: str) -> Schema:
         """Return a new Schema with the named fields removed."""
         kept = tuple((n, s) for n, s in self.fields if n not in names)
         return Schema(fields=kept)

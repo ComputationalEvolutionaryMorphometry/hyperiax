@@ -19,10 +19,7 @@ from hyperiax import (
 def test_down_sweep_propagates_root_value_via_delta():
     """``value <- parent.value + node.delta`` accumulates along path-to-root."""
     topo = symmetric_topology(depth=2, degree=2)  # 7 nodes
-    tree = (
-        Tree.empty(topo, {"value": (), "delta": ()})
-        .set(delta=jnp.ones(7))
-    )
+    tree = Tree.empty(topo, {"value": (), "delta": ()}).set(delta=jnp.ones(7))
 
     @down(reads=("delta",), reads_parent=("value",), writes=("value",))
     def propagate(node, parent, params):
@@ -36,8 +33,7 @@ def test_down_sweep_propagates_root_value_via_delta():
 
 def test_down_sweep_copies_root_to_all_descendants():
     topo = symmetric_topology(depth=3, degree=2)
-    tree = Tree.empty(topo, {"value": (2,)}).at[topo.is_root].set(value=jnp.array([[3.0, 4.0]])
-    )
+    tree = Tree.empty(topo, {"value": (2,)}).at[topo.is_root].set(value=jnp.array([[3.0, 4.0]]))
 
     @down(reads_parent=("value",), writes=("value",))
     def copy_down(node, parent, params):
@@ -82,8 +78,7 @@ def test_down_sweep_root_remains_unchanged():
     """Root has no parent; the sweep starts at level 1, so root data is
     never touched by the user function."""
     topo = symmetric_topology(depth=2, degree=2)
-    tree = Tree.empty(topo, {"value": ()}).at[topo.is_root].set(value=jnp.array([99.0])
-    )
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_root].set(value=jnp.array([99.0]))
 
     @down(reads_parent=("value",), writes=("value",))
     def reset_to_zero(node, parent, params):
@@ -122,15 +117,13 @@ def test_down_sweep_jit_cache_hits_on_identical_topology():
         return {"value": parent.value}
 
     topo1 = symmetric_topology(depth=3, degree=2)
-    tree1 = Tree.empty(topo1, {"value": (2,)}).at[topo1.is_root].set(value=jnp.array([[1.0, 2.0]])
-    )
+    tree1 = Tree.empty(topo1, {"value": (2,)}).at[topo1.is_root].set(value=jnp.array([[1.0, 2.0]]))
     copy_down(tree1)["value"].block_until_ready()
     initial = trace_count
     assert initial > 0
 
     topo2 = symmetric_topology(depth=3, degree=2)
-    tree2 = Tree.empty(topo2, {"value": (2,)}).at[topo2.is_root].set(value=jnp.array([[5.0, 6.0]])
-    )
+    tree2 = Tree.empty(topo2, {"value": (2,)}).at[topo2.is_root].set(value=jnp.array([[5.0, 6.0]]))
     for _ in range(5):
         copy_down(tree2)["value"].block_until_ready()
     assert trace_count == initial
@@ -190,6 +183,7 @@ def test_down_sweep_raises_on_extra_writes():
 
 def test_down_decorator_requires_nonempty_writes():
     with pytest.raises(ValueError):
+
         @down(writes=())
         def empty(node, parent, params):
             return {}
@@ -198,7 +192,10 @@ def test_down_decorator_requires_nonempty_writes():
 def test_sweepfn_rejects_children_reads_on_down_direction():
     with pytest.raises(ValueError):
         hx.SweepFn(
-            direction="down", fn=lambda *a: {"value": None},
-            reads=None, reads_children=("value",),
-            reads_parent=None, writes=("value",),
+            direction="down",
+            fn=lambda *a: {"value": None},
+            reads=None,
+            reads_children=("value",),
+            reads_parent=None,
+            writes=("value",),
         )

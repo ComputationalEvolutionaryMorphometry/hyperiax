@@ -4,8 +4,8 @@
 </p>
 
 > **Note (May 2026):** the `v3` branch is a ground-up rewrite of the core API.
-> The published `pip install hyperiax` still points at the legacy 0.x release.
-> v3 is under active construction — see `plan-a-hyperiax-node-flax-b-purrfect-spring.md`.
+> The published `pip install hyperiax` still points at the legacy 0.x release;
+> v3.0.0 is the upcoming first release of the new line.
 
 ## Introduction
 
@@ -26,17 +26,20 @@ git clone git@github.com:ComputationalEvolutionaryMorphometry/hyperiax.git
 cd hyperiax
 git switch v3
 
-# Create the project venv and install dev dependencies (core only).
+# Create the project venv with the dev group (test + lint + docs tooling).
 uv sync --group dev
 
-# Or include optional extras:
-#   - io:             ete3-backed Newick I/O
-#   - prebuilt-shape: trimesh utilities for the LDDMM / shape prebuilts
-#   - prebuilt-bffg:  diffrax-backed ODE path for the SDE BFFG filter
-uv sync --group dev --extra io --extra prebuilt-shape --extra prebuilt-bffg
+# Optional extras:
+#   - io:        ete3-backed Newick I/O
+#   - prebuilt:  diffrax + jax-tqdm for the BFFG / MCMC prebuilt models
+#   - notebook:  jupyter + matplotlib + optax for the tutorial notebooks
+uv sync --group dev --extra io --extra prebuilt --extra notebook
 
 # Run tests
 uv run pytest
+
+# Enable pre-commit hooks (ruff lint + format, whitespace, yaml/toml checks)
+uv run pre-commit install
 ```
 
 Python 3.11 or newer is required.
@@ -47,7 +50,7 @@ Python 3.11 or newer is required.
 hyperiax/
 ├── core/                 # L1 — Topology, Tree, sweep decorators (no external deps)
 ├── io/                   # L2 — Newick I/O via ete3
-└── prebuilt/             # L2 — phylo_mean, BFFG (Gaussian/SDE), LDDMM kernels
+└── prebuilt/             # L2 — phylo_mean, BFFG (Gaussian/SDE), MCMC, SDE utilities
 ```
 
 ## Contribution

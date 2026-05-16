@@ -10,10 +10,7 @@ wrapper stripped out).
 
 import jax
 import jax.numpy as jnp
-import numpy as np
-import pytest
 
-import hyperiax as hx
 from hyperiax import Topology, Tree, symmetric_topology
 from hyperiax.prebuilt import (
     gaussian_down_conditional,
@@ -28,14 +25,17 @@ def _make_3_node_tree(edge_lengths):
     """root + 2 leaves; scalar state (n=d=1)."""
     topo = Topology.from_parents([0, 0, 0])
     n, d = 1, 1
-    tree = Tree.empty(topo, {
-        "edge_length": (),
-        "value": (n * d,),
-        "noise": (n * d,),
-        "c_T": (d,),
-        "F_T": (n * d,),
-        "H_T": (n, n),
-    })
+    tree = Tree.empty(
+        topo,
+        {
+            "edge_length": (),
+            "value": (n * d,),
+            "noise": (n * d,),
+            "c_T": (d,),
+            "F_T": (n * d,),
+            "H_T": (n, n),
+        },
+    )
     return tree.set(edge_length=jnp.asarray(edge_lengths, dtype=jnp.float32))
 
 
@@ -54,9 +54,7 @@ def test_gaussian_up_3_node_root_posterior_matches_closed_form():
     y1, y2 = 1.0, 2.0
 
     tree = _make_3_node_tree([0.0, l1, l2])
-    tree = init_gaussian_leaves(
-        tree, jnp.array([[y1], [y2]]), obs_var=obs_var, n=n, d=d
-    )
+    tree = init_gaussian_leaves(tree, jnp.array([[y1], [y2]]), obs_var=obs_var, n=n, d=d)
 
     def a(v, params):
         return params["sigma_sq"] * jnp.eye(n)
@@ -112,19 +110,24 @@ def test_gaussian_bffg_recovers_phylo_mean_for_star_tree_zero_obs_var():
     edge_lengths = jax.random.uniform(k_e, (topo.size,), minval=0.3, maxval=2.0)
     leaf_vals = jax.random.normal(k_y, (n_leaves, n * d))
 
-    bffg_tree = Tree.empty(topo, {
-        "edge_length": (), "value": (n * d,), "noise": (n * d,),
-        "c_T": (d,), "F_T": (n * d,), "H_T": (n, n),
-    }).set(edge_length=edge_lengths)
+    bffg_tree = Tree.empty(
+        topo,
+        {
+            "edge_length": (),
+            "value": (n * d,),
+            "noise": (n * d,),
+            "c_T": (d,),
+            "F_T": (n * d,),
+            "H_T": (n, n),
+        },
+    ).set(edge_length=edge_lengths)
     bffg_tree = init_gaussian_leaves(bffg_tree, leaf_vals, obs_var=1e-7, n=n, d=d)
 
     def a(v, params):
         return jnp.eye(n)  # σ² = 1
 
     out_bffg = gaussian_up(n, a, d=d)(bffg_tree)
-    bffg_root_mean = float(
-        (out_bffg["F_T"][0] / out_bffg["H_T"][0].squeeze()).squeeze()
-    )
+    bffg_root_mean = float((out_bffg["F_T"][0] / out_bffg["H_T"][0].squeeze()).squeeze())
 
     pm_tree = Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
     pm_tree = pm_tree.set(edge_length=edge_lengths)
@@ -141,9 +144,14 @@ def test_gaussian_bffg_recovers_phylo_mean_for_star_tree_zero_obs_var():
 def test_gaussian_down_unconditional_no_noise_keeps_parent_value():
     topo = symmetric_topology(depth=2, degree=2)
     n = 1
-    tree = Tree.empty(topo, {
-        "value": (n,), "noise": (n,), "edge_length": (),
-    })
+    tree = Tree.empty(
+        topo,
+        {
+            "value": (n,),
+            "noise": (n,),
+            "edge_length": (),
+        },
+    )
     tree = tree.set(edge_length=jnp.ones(topo.size))
     tree = tree.at[topo.is_root].set(value=jnp.array([[5.0]]))
     # noise = 0 → child value = parent value
@@ -158,9 +166,14 @@ def test_gaussian_down_unconditional_brownian_variance_at_leaves():
     depth = 3
     topo = symmetric_topology(depth=depth, degree=2)
     n = 1
-    tree = Tree.empty(topo, {
-        "value": (n,), "noise": (n,), "edge_length": (),
-    }).set(edge_length=jnp.ones(topo.size))
+    tree = Tree.empty(
+        topo,
+        {
+            "value": (n,),
+            "noise": (n,),
+            "edge_length": (),
+        },
+    ).set(edge_length=jnp.ones(topo.size))
 
     sweep = gaussian_down_unconditional(lambda v, p: jnp.eye(n))
 
@@ -215,18 +228,25 @@ def _make_3_node_gaussian_conditional_tree(edge_lengths, leaf_values, obs_var):
     """Tree with the schema needed for full Gaussian BFFG (up + cond down)."""
     topo = Topology.from_parents([0, 0, 0])
     n, d = 1, 1
-    tree = Tree.empty(topo, {
-        "edge_length": (),
-        "value": (n * d,),
-        "noise": (n * d,),
-        "c_T": (d,),
-        "F_T": (n * d,),
-        "H_T": (n, n),
-        "logw": (),
-    })
+    tree = Tree.empty(
+        topo,
+        {
+            "edge_length": (),
+            "value": (n * d,),
+            "noise": (n * d,),
+            "c_T": (d,),
+            "F_T": (n * d,),
+            "H_T": (n, n),
+            "logw": (),
+        },
+    )
     tree = tree.set(edge_length=jnp.asarray(edge_lengths))
     tree = init_gaussian_leaves(
-        tree, jnp.asarray(leaf_values), obs_var=obs_var, n=n, d=d,
+        tree,
+        jnp.asarray(leaf_values),
+        obs_var=obs_var,
+        n=n,
+        d=d,
     )
     return tree, topo
 
@@ -240,7 +260,9 @@ def test_gaussian_down_conditional_zero_noise_recovers_observations_in_low_noise
     leaf_values = [[3.0], [5.0]]
     obs_var = 1e-3
     tree, topo = _make_3_node_gaussian_conditional_tree(
-        edge_lengths, leaf_values, obs_var,
+        edge_lengths,
+        leaf_values,
+        obs_var,
     )
 
     a = lambda v, p: jnp.eye(n)
@@ -261,7 +283,9 @@ def test_gaussian_down_conditional_zero_noise_is_deterministic():
     """Two runs with the same inputs (zero noise) must produce identical samples."""
     n, d = 1, 1
     tree, topo = _make_3_node_gaussian_conditional_tree(
-        [0.0, 1.0, 2.0], [[1.0], [2.0]], obs_var=0.1,
+        [0.0, 1.0, 2.0],
+        [[1.0], [2.0]],
+        obs_var=0.1,
     )
     a = lambda v, p: jnp.eye(n)
     up_out = gaussian_up(n, a, d=d)(tree)
@@ -278,7 +302,9 @@ def test_gaussian_down_conditional_zero_noise_is_deterministic():
 def test_gaussian_down_conditional_pipeline_produces_finite_logw():
     n, d = 1, 1
     tree, topo = _make_3_node_gaussian_conditional_tree(
-        [0.0, 1.0, 2.0], [[1.0], [2.0]], obs_var=0.1,
+        [0.0, 1.0, 2.0],
+        [[1.0], [2.0]],
+        obs_var=0.1,
     )
     a = lambda v, p: jnp.eye(n)
     up_out = gaussian_up(n, a, d=d)(tree)
@@ -294,7 +320,9 @@ def test_gaussian_down_conditional_pipeline_produces_finite_logw():
 def test_gaussian_down_conditional_under_outer_jit():
     n, d = 1, 1
     tree, topo = _make_3_node_gaussian_conditional_tree(
-        [0.0, 1.0, 1.0], [[1.0], [-1.0]], obs_var=0.05,
+        [0.0, 1.0, 1.0],
+        [[1.0], [-1.0]],
+        obs_var=0.05,
     )
     a = lambda v, p: jnp.eye(n)
     up_out = gaussian_up(n, a, d=d)(tree)
@@ -312,7 +340,9 @@ def test_gaussian_up_then_down_conditional_lax_scan_pipeline():
     """Wrap up + conditional down in a single jit and run via lax.scan."""
     n, d = 1, 1
     tree, topo = _make_3_node_gaussian_conditional_tree(
-        [0.0, 1.0, 1.0], [[1.0], [-1.0]], obs_var=0.1,
+        [0.0, 1.0, 1.0],
+        [[1.0], [-1.0]],
+        obs_var=0.1,
     )
     a = lambda v, p: jnp.eye(n)
     up_sweep = gaussian_up(n, a, d=d)
@@ -355,8 +385,13 @@ def test_gaussian_down_conditional_logw_is_zero_in_pure_linear_case():
     N = topo.size
     n, d = 1, 1
     schema = {
-        "value": (n * d,), "noise": (n * d,), "edge_length": (),
-        "c_T": (d,), "F_T": (n * d,), "H_T": (n, n), "logw": (),
+        "value": (n * d,),
+        "noise": (n * d,),
+        "edge_length": (),
+        "c_T": (d,),
+        "F_T": (n * d,),
+        "H_T": (n, n),
+        "logw": (),
     }
     empty = Tree.empty(topo, schema).set(edge_length=jnp.ones(N))
     a = lambda v, p: p["sigma_sq"] * jnp.eye(n)
@@ -380,8 +415,13 @@ def test_gaussian_down_conditional_logw_matches_theorem_14_on_single_edge():
     topo = Topology.from_parents([0, 0])
     n, d = 1, 1
     schema = {
-        "value": (n * d,), "noise": (n * d,), "edge_length": (),
-        "c_T": (d,), "F_T": (n * d,), "H_T": (n, n), "logw": (),
+        "value": (n * d,),
+        "noise": (n * d,),
+        "edge_length": (),
+        "c_T": (d,),
+        "F_T": (n * d,),
+        "H_T": (n, n),
+        "logw": (),
     }
     empty = Tree.empty(topo, schema).set(edge_length=jnp.asarray([0.0, 1.5]))
     # Nonlinear a: Q(v) = σ² · (1 + 0.3·v²).
@@ -401,18 +441,17 @@ def test_gaussian_down_conditional_logw_matches_theorem_14_on_single_edge():
     # Canonical at the leaf node is what init_gaussian_leaves set:
     # H = I/τ², F = H·y.  v_T = H⁻¹F = y.
     H_T_c = jnp.eye(n) / params["tau_sq"]
-    F_T_c = (H_T_c @ leaf_obs[0])
+    F_T_c = H_T_c @ leaf_obs[0]
     v_T = jnp.linalg.solve(H_T_c, F_T_c)
     var = 1.5
     x_parent = jnp.zeros(n)
     Q_true = var * a(x_parent, params)
-    Q_aux  = var * a(v_T,      params)
+    Q_aux = var * a(v_T, params)
     C_true = Q_true + jnp.linalg.inv(H_T_c)
-    C_aux  = Q_aux  + jnp.linalg.inv(H_T_c)
-    expected = (
-        jax.scipy.stats.multivariate_normal.logpdf(v_T, x_parent, C_true)
-        - jax.scipy.stats.multivariate_normal.logpdf(v_T, x_parent, C_aux)
-    )
+    C_aux = Q_aux + jnp.linalg.inv(H_T_c)
+    expected = jax.scipy.stats.multivariate_normal.logpdf(
+        v_T, x_parent, C_true
+    ) - jax.scipy.stats.multivariate_normal.logpdf(v_T, x_parent, C_aux)
     # Tree-wide sum(logw) is just this one edge's contribution; root and
     # leaf both write a logw entry but the root's was never assigned by
     # the down sweep (it's a @down with reads_parent), so it stays 0.
@@ -428,8 +467,13 @@ def test_gaussian_down_conditional_logw_nonzero_under_state_dependent_a():
     N = topo.size
     n, d = 1, 1
     schema = {
-        "value": (n * d,), "noise": (n * d,), "edge_length": (),
-        "c_T": (d,), "F_T": (n * d,), "H_T": (n, n), "logw": (),
+        "value": (n * d,),
+        "noise": (n * d,),
+        "edge_length": (),
+        "c_T": (d,),
+        "F_T": (n * d,),
+        "H_T": (n, n),
+        "logw": (),
     }
     empty = Tree.empty(topo, schema).set(edge_length=jnp.ones(N))
     a = lambda v, p: p["sigma_sq"] * (1.0 + 0.3 * v[0] ** 2) * jnp.eye(n)

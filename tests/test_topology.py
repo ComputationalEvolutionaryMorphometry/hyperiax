@@ -97,8 +97,14 @@ def test_topology_all_derived_arrays_are_numpy_not_jax():
     and rides through ``jax.jit`` as static aux_data."""
     topo = Topology.from_parents([0, 0, 0, 1, 1, 2, 2])
     for field_name in [
-        "parents", "level_starts", "node_depths", "child_counts",
-        "is_root", "is_leaf", "is_inner", "pbuckets",
+        "parents",
+        "level_starts",
+        "node_depths",
+        "child_counts",
+        "is_root",
+        "is_leaf",
+        "is_inner",
+        "pbuckets",
     ]:
         val = getattr(topo, field_name)
         assert isinstance(val, np.ndarray), f"{field_name} should be np.ndarray, got {type(val)}"

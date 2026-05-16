@@ -35,7 +35,7 @@ def symmetric_topology(depth: int, degree: int) -> Topology:
         prev_level_start = 0
         cursor = 1
         for level in range(1, depth + 1):
-            n_at_level = degree ** level
+            n_at_level = degree**level
             local = np.arange(n_at_level, dtype=np.int32)
             parents[cursor : cursor + n_at_level] = prev_level_start + local // degree
             prev_level_start = cursor

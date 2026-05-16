@@ -1,0 +1,65 @@
+name: Docs
+
+on:
+  push:
+    branches: [main, v3]
+  pull_request:
+    branches: [main, v3]
+  workflow_dispatch:
+
+# Allow one concurrent deployment; cancel in-progress runs on the same ref.
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Sphinx build (strict)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # setuptools-scm needs the full history + tags to derive __version__
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Sync project (all extras + dev group)
+        run: uv sync --all-extras --group dev
+
+      - name: Build HTML (warnings as errors)
+        run: uv run make -C docs html SPHINXOPTS=-W
+
+      - name: Upload Pages artifact
+        # Only the deployable ref needs to upload; PRs just verify the build.
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/v3'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build/html
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/v3'
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      pages: write       # to deploy to Pages
+      id-token: write    # to verify the deployment originates from this workflow
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

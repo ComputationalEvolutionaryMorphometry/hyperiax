@@ -25,10 +25,7 @@ def test_complex_newick_round_trip_with_internal_names():
     """A more involved tree with named internal nodes and the root name 'N'.
     The root name is preserved (despite ete3 dropping it by default —
     our writer patches it back)."""
-    src = (
-        "(((A:1,B:1)H:0.5,(C:1,D:2)I:0.5)L:0.1,"
-        "((E:1,F:1,G:1)J:0.5,K:0.5)M:0.1)N;"
-    )
+    src = "(((A:1,B:1)H:0.5,(C:1,D:2)I:0.5)L:0.1,((E:1,F:1,G:1)J:0.5,K:0.5)M:0.1)N;"
     tree = newick.read(src)
     assert newick.write(tree) == src
 
@@ -118,5 +115,3 @@ def test_newick_tree_can_run_a_sweep():
     out = sum_up(tree)
     # Root has 3 children with values 10/20/30 → sum = 60
     assert jnp.allclose(out["value"][0], 60.0)
-
-

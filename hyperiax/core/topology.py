@@ -15,8 +15,8 @@ Convention
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import jax
 import numpy as np
@@ -31,31 +31,31 @@ class Topology:
 
     # ── derived: shape ──
     size: int
-    depth: int                  # = len(level_starts) - 2; a depth-0 tree has only the root
-    level_starts: np.ndarray    # (depth+2,) int32; level i is [level_starts[i], level_starts[i+1])
-    node_depths: np.ndarray     # (N,) int32
+    depth: int  # = len(level_starts) - 2; a depth-0 tree has only the root
+    level_starts: np.ndarray  # (depth+2,) int32; level i is [level_starts[i], level_starts[i+1])
+    node_depths: np.ndarray  # (N,) int32
 
     # ── derived: masks ──
-    child_counts: np.ndarray    # (N,) int32
-    is_root: np.ndarray         # (N,) bool
-    is_leaf: np.ndarray         # (N,) bool
-    is_inner: np.ndarray        # (N,) bool
+    child_counts: np.ndarray  # (N,) int32
+    is_root: np.ndarray  # (N,) bool
+    is_leaf: np.ndarray  # (N,) bool
+    is_inner: np.ndarray  # (N,) bool
 
     # ── degree info ──
     max_degree: int
     equal_degree: bool
 
     # ── equal-degree gather layout (None when not equal-degree) ──
-    gather_child_idx: np.ndarray | None       # (N, max_degree) int32
-    level_non_leaf_indices: tuple             # tuple[np.ndarray, ...], one per level
+    gather_child_idx: np.ndarray | None  # (N, max_degree) int32
+    level_non_leaf_indices: tuple  # tuple[np.ndarray, ...], one per level
 
     # ── segment-reduction layout (always populated) ──
     # For each node, its *local* segment id within its level. Used as
     # ``segment_ids`` for ``jax.ops.segment_*`` during up-sweeps.
-    pbuckets: np.ndarray                      # (N,) int32
+    pbuckets: np.ndarray  # (N,) int32
     # For each level, the parent node ids (in level-1) that the segments at
     # this level reduce into. ``pbuckets_ref[L]`` has shape ``(n_parents_at_L-1,)``.
-    pbuckets_ref: tuple                       # tuple[np.ndarray, ...]
+    pbuckets_ref: tuple  # tuple[np.ndarray, ...]
 
     # ── informational ──
     names: tuple | None  # node names (e.g. from Newick); not used by dispatch
@@ -93,7 +93,7 @@ class Topology:
         parents,
         *,
         names: Sequence[str] | None = None,
-    ) -> "Topology":
+    ) -> Topology:
         """Build a Topology from a BFS-ordered parents array.
 
         Parameters
@@ -116,9 +116,7 @@ def _build_topology(parents_in, names) -> Topology:
     if parents.size == 0:
         raise ValueError("parents must be non-empty")
     if int(parents[0]) != 0:
-        raise ValueError(
-            "Convention: parents[0] must be 0 (root is its own parent)."
-        )
+        raise ValueError("Convention: parents[0] must be 0 (root is its own parent).")
     n = int(parents.shape[0])
 
     # ── child counts: subtract the root's self-reference ──
@@ -137,8 +135,7 @@ def _build_topology(parents_in, names) -> Topology:
         p = int(parents[i])
         if p >= i:
             raise ValueError(
-                f"parents array is not BFS-ordered at index {i} "
-                f"(parents[{i}]={p} >= {i})"
+                f"parents array is not BFS-ordered at index {i} (parents[{i}]={p} >= {i})"
             )
         node_depths[i] = node_depths[p] + 1
     depth = int(node_depths.max()) if n > 0 else 0

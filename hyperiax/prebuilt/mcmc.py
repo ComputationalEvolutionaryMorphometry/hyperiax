@@ -8,8 +8,9 @@ fold any change-of-variables Jacobian into ``log_target_fn``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -20,6 +21,7 @@ import jax.numpy as jnp
 # ``hyperiax.prebuilt.mcmc`` stays usable with just JAX.
 try:
     from jax_tqdm import scan_tqdm as _scan_tqdm
+
     _HAS_JAX_TQDM = True
 except ImportError:
     _HAS_JAX_TQDM = False
@@ -146,7 +148,7 @@ def run_chain(
         return new_state, (save(new_state), info)
 
     if _HAS_JAX_TQDM:
-        body = _scan_tqdm(n=n_steps, desc="Running MCMC chain", tqdm_type='std')(body)
+        body = _scan_tqdm(n=n_steps, desc="Running MCMC chain", tqdm_type="std")(body)
 
     xs = (jnp.arange(n_steps), keys)
     _, (trace, info) = jax.lax.scan(body, init, xs)
@@ -158,19 +160,19 @@ def _per_leaf_proposal(
     leaf_step: Callable[[jax.Array, jax.Array], jax.Array],
 ) -> Callable[[jax.Array, Any], Any]:
     """Wrap a per-leaf ``(noise, x) -> x'`` rule into a pytree proposer."""
+
     def propose(key: jax.Array, position: Any) -> Any:
         leaves, treedef = jax.tree.flatten(position)
         keys = jax.random.split(key, max(1, len(leaves)))
         new_leaves = [
             leaf_step(
-                jax.random.normal(
-                    k, jnp.shape(x), dtype=jnp.result_type(x, jnp.float32)
-                ),
+                jax.random.normal(k, jnp.shape(x), dtype=jnp.result_type(x, jnp.float32)),
                 x,
             )
             for k, x in zip(keys, leaves)
         ]
         return jax.tree.unflatten(treedef, new_leaves)
+
     return propose
 
 
@@ -187,5 +189,5 @@ def crank_nicolson_proposal(beta: float) -> Callable[[jax.Array, Any], Any]:
     pure likelihood ratio (no prior / Jacobian terms needed). Good ``β`` is
     0.01–0.1; tune for ~25–40% acceptance.
     """
-    scale_old = jnp.sqrt(1.0 - beta ** 2)
+    scale_old = jnp.sqrt(1.0 - beta**2)
     return _per_leaf_proposal(lambda eps, x: scale_old * x + beta * eps)

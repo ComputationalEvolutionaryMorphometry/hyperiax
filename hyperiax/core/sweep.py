@@ -8,8 +8,9 @@ function, and the explicit ``reads`` / ``writes`` declarations. It is
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Callable, Literal, Mapping, Sequence
+from typing import Literal
 
 import jax
 
@@ -49,14 +50,16 @@ class SweepFn:
     def __hash__(self) -> int:
         # `id(self.fn)` is sufficient: two functions with different identity
         # mean different traced code, so a different jit cache entry is correct.
-        return hash((
-            self.direction,
-            id(self.fn),
-            self.reads,
-            self.reads_children,
-            self.reads_parent,
-            self.writes,
-        ))
+        return hash(
+            (
+                self.direction,
+                id(self.fn),
+                self.reads,
+                self.reads_children,
+                self.reads_parent,
+                self.writes,
+            )
+        )
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -86,6 +89,7 @@ class SweepFn:
     ) -> Tree:
         # Local import avoids a circular at module import time.
         from .dispatch import down_dispatch, up_dispatch
+
         if params is None:
             params = {}
         if self.direction == "up":
@@ -125,6 +129,7 @@ def up(
 
         new_tree = avg(tree)
     """
+
     def _wrap(fn: Callable) -> SweepFn:
         return SweepFn(
             direction="up",
@@ -134,6 +139,7 @@ def up(
             reads_parent=None,
             writes=tuple(writes),
         )
+
     return _wrap
 
 
@@ -169,6 +175,7 @@ def down(
 
         new_tree = propagate(tree)
     """
+
     def _wrap(fn: Callable) -> SweepFn:
         return SweepFn(
             direction="down",
@@ -178,4 +185,5 @@ def down(
             reads_parent=_normalize(reads_parent),
             writes=tuple(writes),
         )
+
     return _wrap

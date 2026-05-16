@@ -96,9 +96,8 @@ def test_drop_removes_field(topo):
 
 # ── pytree round-trip (T-2) ──────────────────────────────────────────
 def test_pytree_flatten_round_trips(topo):
-    tree = (
-        Tree.empty(topo, {"value": (2,), "edge": ()})
-        .set(value=jnp.ones((7, 2)), edge=jnp.arange(7, dtype=jnp.float32))
+    tree = Tree.empty(topo, {"value": (2,), "edge": ()}).set(
+        value=jnp.ones((7, 2)), edge=jnp.arange(7, dtype=jnp.float32)
     )
     leaves, treedef = jax.tree_util.tree_flatten(tree)
     assert len(leaves) == 2
@@ -109,13 +108,10 @@ def test_pytree_flatten_round_trips(topo):
 
 
 def test_pytree_leaf_order_is_alphabetical_by_key(topo):
-    tree = (
-        Tree.empty(topo, {"value": (2,), "edge": (), "a_thing": (1,)})
-        .set(
-            value=jnp.full((7, 2), 2.0),
-            edge=jnp.full((7,), 3.0),
-            a_thing=jnp.full((7, 1), 1.0),
-        )
+    tree = Tree.empty(topo, {"value": (2,), "edge": (), "a_thing": (1,)}).set(
+        value=jnp.full((7, 2), 2.0),
+        edge=jnp.full((7,), 3.0),
+        a_thing=jnp.full((7, 1), 1.0),
     )
     leaves, _ = jax.tree_util.tree_flatten(tree)
     assert jnp.array_equal(leaves[0], jnp.full((7, 1), 1.0))

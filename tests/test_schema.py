@@ -1,6 +1,5 @@
 """Schema / FieldSpec sanity tests."""
 
-import jax.numpy as jnp
 import pytest
 
 from hyperiax import FieldSpec, Schema

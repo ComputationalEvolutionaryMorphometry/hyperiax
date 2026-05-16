@@ -11,7 +11,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import hyperiax as hx
 from hyperiax import Topology, Tree
 from hyperiax.prebuilt import (
     gaussian_up,
@@ -24,7 +23,6 @@ from hyperiax.prebuilt import (
 )
 from hyperiax.prebuilt.bffg import backward_filter, forward_guided
 from hyperiax.prebuilt.sde import dts
-
 
 N, D = 1, 1
 N_STEPS = 5
@@ -55,8 +53,12 @@ def test_backward_filter_brownian_matches_gaussian_closed_form():
     out = backward_filter(
         dts(T=T, n_steps=4),
         params={},
-        c_T=c_T, v_T=v_T, F_T=F_T, H_T=H_T,
-        tildea0=jnp.eye(1), tildeaT=jnp.eye(1),
+        c_T=c_T,
+        v_T=v_T,
+        F_T=F_T,
+        H_T=H_T,
+        tildea0=jnp.eye(1),
+        tildeaT=jnp.eye(1),
     )
     expected_H = 3.0 / (1.0 + 3.0 * T)
     expected_F = 2.0 / (1.0 + 3.0 * T)
@@ -77,9 +79,17 @@ def test_forward_guided_brownian_logpsi_is_zero():
     H_T = jnp.array([[2.0]])
     F_T = jnp.array([1.0])
     Xs, logpsi = forward_guided(
-        x0, _dts, dWs, _zero_drift, _identity_sigma, params={},
-        a=_identity, F_T=F_T, H_T=H_T,
-        tildea0=jnp.eye(1), tildeaT=jnp.eye(1),
+        x0,
+        _dts,
+        dWs,
+        _zero_drift,
+        _identity_sigma,
+        params={},
+        a=_identity,
+        F_T=F_T,
+        H_T=H_T,
+        tildea0=jnp.eye(1),
+        tildeaT=jnp.eye(1),
     )
     assert abs(float(logpsi)) < 1e-5
     assert Xs.shape == (n_steps + 1, 1)
@@ -97,9 +107,17 @@ def test_forward_guided_zero_noise_drives_state_toward_target():
     H_T = jnp.array([[1.0]])
     F_T = jnp.array([3.0])
     Xs, _ = forward_guided(
-        x0, _dts, dWs, _zero_drift, _identity_sigma, params={},
-        a=_identity, F_T=F_T, H_T=H_T,
-        tildea0=jnp.eye(1), tildeaT=jnp.eye(1),
+        x0,
+        _dts,
+        dWs,
+        _zero_drift,
+        _identity_sigma,
+        params={},
+        a=_identity,
+        F_T=F_T,
+        H_T=H_T,
+        tildea0=jnp.eye(1),
+        tildeaT=jnp.eye(1),
     )
     # The bridge target at time T is v_T = H⁻¹·F = 3.0; the guided
     # ODE relaxes toward it. Allow a generous slack.
@@ -126,7 +144,8 @@ def _make_sde_tree(edge_lengths, leaf_values, obs_var, root_value=0.0):
         tree,
         jnp.asarray(leaf_values),
         obs_var=obs_var,
-        n=N, d=D,
+        n=N,
+        d=D,
         root_value=jnp.array([root_value]),
     )
     return tree, topo
@@ -140,20 +159,22 @@ def test_sde_up_brownian_matches_gaussian_up_bit_for_bit():
     sde_tree, topo = _make_sde_tree(edge_lengths, leaf_values, obs_var)
     sde_out = sde_up(n_steps=N_STEPS, a=_identity)(sde_tree)
 
-    gauss_tree = Tree.empty(topo, {
-        "edge_length": (), "c_T": (D,), "F_T": (N * D,), "H_T": (N, N),
-    }).set(edge_length=jnp.asarray(edge_lengths))
+    gauss_tree = Tree.empty(
+        topo,
+        {
+            "edge_length": (),
+            "c_T": (D,),
+            "F_T": (N * D,),
+            "H_T": (N, N),
+        },
+    ).set(edge_length=jnp.asarray(edge_lengths))
     gauss_tree = init_gaussian_leaves(
         gauss_tree, jnp.asarray(leaf_values), obs_var=obs_var, n=N, d=D
     )
     gauss_out = gaussian_up(n=N, a=_identity, d=D)(gauss_tree)
 
-    np.testing.assert_allclose(
-        np.asarray(sde_out["F_T"]), np.asarray(gauss_out["F_T"]), atol=1e-6
-    )
-    np.testing.assert_allclose(
-        np.asarray(sde_out["H_T"]), np.asarray(gauss_out["H_T"]), atol=1e-6
-    )
+    np.testing.assert_allclose(np.asarray(sde_out["F_T"]), np.asarray(gauss_out["F_T"]), atol=1e-6)
+    np.testing.assert_allclose(np.asarray(sde_out["H_T"]), np.asarray(gauss_out["H_T"]), atol=1e-6)
 
 
 def test_sde_up_root_posterior_matches_hand_formula():
@@ -239,7 +260,10 @@ def test_sde_up_then_down_conditional_pipeline_runs():
     down. Must produce finite values for the trajectories and logpsi."""
     edge_lengths = [0.0, 1.0, 2.0]
     sde_tree, topo = _make_sde_tree(
-        edge_lengths, [[1.0], [2.0]], obs_var=0.1, root_value=0.0,
+        edge_lengths,
+        [[1.0], [2.0]],
+        obs_var=0.1,
+        root_value=0.0,
     )
     sde_tree = sde_tree.set(noise=jnp.zeros((topo.size, N_STEPS, N * D)))
 
@@ -301,12 +325,26 @@ def test_backward_filter_ode_with_zero_drift_matches_closed_form():
     tildea = jnp.eye(1)
 
     cf = backward_filter(
-        _dts, {}, c_T, v_T, F_T, H_T,
-        tildea0=tildea, tildeaT=tildea,
+        _dts,
+        {},
+        c_T,
+        v_T,
+        F_T,
+        H_T,
+        tildea0=tildea,
+        tildeaT=tildea,
     )
     ode = backward_filter(
-        _dts, {}, c_T, v_T, F_T, H_T,
-        tildea0=tildea, tildeaT=tildea, B=_B_zero, beta=_beta_zero,
+        _dts,
+        {},
+        c_T,
+        v_T,
+        F_T,
+        H_T,
+        tildea0=tildea,
+        tildeaT=tildea,
+        B=_B_zero,
+        beta=_beta_zero,
     )
 
     # diffrax Tsit5 + PI controller (rtol=1e-7, atol=1e-9) is at least 1e-6 accurate.
@@ -331,9 +369,16 @@ def test_backward_filter_ode_returns_correct_endpoints():
     c_T = jnp.array([0.0])
 
     ode = backward_filter(
-        _dts, {}, c_T, v_T, F_T, H_T,
-        tildea0=jnp.eye(1), tildeaT=jnp.eye(1),
-        B=_B_zero, beta=_beta_zero,
+        _dts,
+        {},
+        c_T,
+        v_T,
+        F_T,
+        H_T,
+        tildea0=jnp.eye(1),
+        tildeaT=jnp.eye(1),
+        B=_B_zero,
+        beta=_beta_zero,
     )
     # At t = T, H_t equals H_T (the initial condition of the backward sweep).
     assert jnp.allclose(ode["H_t"][-1], H_T, atol=1e-6)
@@ -353,20 +398,45 @@ def test_forward_guided_ode_with_zero_drift_matches_closed_form():
     tildea = jnp.eye(1)
 
     Xs_cf, lp_cf = forward_guided(
-        x0, _dts, dWs, _zero_drift, _identity_sigma, params={},
-        a=_identity, F_T=F_T, H_T=H_T,
-        tildea0=tildea, tildeaT=tildea,
+        x0,
+        _dts,
+        dWs,
+        _zero_drift,
+        _identity_sigma,
+        params={},
+        a=_identity,
+        F_T=F_T,
+        H_T=H_T,
+        tildea0=tildea,
+        tildeaT=tildea,
     )
 
     filt = backward_filter(
-        _dts, {}, jnp.zeros(1), jnp.zeros(1), F_T, H_T,
-        tildea0=tildea, tildeaT=tildea, B=_B_zero, beta=_beta_zero,
+        _dts,
+        {},
+        jnp.zeros(1),
+        jnp.zeros(1),
+        F_T,
+        H_T,
+        tildea0=tildea,
+        tildeaT=tildea,
+        B=_B_zero,
+        beta=_beta_zero,
     )
     Xs_ode, lp_ode = forward_guided(
-        x0, _dts, dWs, _zero_drift, _identity_sigma, params={},
-        a=_identity, F_t=filt["F_t"], H_t=filt["H_t"],
-        tildea0=tildea, tildeaT=tildea,
-        B=_B_zero, beta=_beta_zero,
+        x0,
+        _dts,
+        dWs,
+        _zero_drift,
+        _identity_sigma,
+        params={},
+        a=_identity,
+        F_t=filt["F_t"],
+        H_t=filt["H_t"],
+        tildea0=tildea,
+        tildeaT=tildea,
+        B=_B_zero,
+        beta=_beta_zero,
     )
     assert jnp.allclose(Xs_cf, Xs_ode, atol=1e-5)
     assert jnp.allclose(lp_cf, lp_ode, atol=1e-5)
@@ -375,11 +445,16 @@ def test_forward_guided_ode_with_zero_drift_matches_closed_form():
 def test_sde_up_ode_with_zero_drift_matches_closed_form_sweep():
     edge_lengths = [0.0, 1.0, 2.0]
     sde_tree, _ = _make_sde_tree(
-        edge_lengths, [[1.0], [2.0]], obs_var=0.1,
+        edge_lengths,
+        [[1.0], [2.0]],
+        obs_var=0.1,
     )
     cf_out = sde_up(n_steps=N_STEPS, a=_identity)(sde_tree)
     ode_out = sde_up(
-        n_steps=N_STEPS, a=_identity, B=_B_zero, beta=_beta_zero,
+        n_steps=N_STEPS,
+        a=_identity,
+        B=_B_zero,
+        beta=_beta_zero,
     )(sde_tree)
     assert jnp.allclose(cf_out["F_T"], ode_out["F_T"], atol=1e-5)
     assert jnp.allclose(cf_out["H_T"], ode_out["H_T"], atol=1e-5)
@@ -392,15 +467,21 @@ def test_sde_full_pipeline_with_nontrivial_damping_runs():
     state close to its observed value (with small slack from obs_var)."""
     edge_lengths = [0.0, 1.0, 1.0]
     sde_tree, topo = _make_sde_tree(
-        edge_lengths, [[1.0], [-1.0]], obs_var=0.05,
+        edge_lengths,
+        [[1.0], [-1.0]],
+        obs_var=0.05,
         root_value=0.0,
     )
     sde_tree = sde_tree.set(noise=jnp.zeros((topo.size, N_STEPS, N * D)))
 
     up_sweep = sde_up(n_steps=N_STEPS, a=_identity, B=_B_damping, beta=_beta_zero)
     cond = sde_down_conditional(
-        N_STEPS, _zero_drift, _identity_sigma, _identity,
-        B=_B_damping, beta=_beta_zero,
+        N_STEPS,
+        _zero_drift,
+        _identity_sigma,
+        _identity,
+        B=_B_damping,
+        beta=_beta_zero,
     )
     t = up_sweep(sde_tree)
     t = propagate_v_T_to_v_0()(t)
@@ -432,10 +513,16 @@ def test_backward_filter_ode_without_diffrax_gives_clean_error(monkeypatch):
 
     with pytest.raises(ImportError, match="prebuilt-bffg"):
         _backward_filter_ode(
-            dts(T=1.0, n_steps=4), {},
-            jnp.zeros(1), jnp.zeros(1), jnp.zeros(1), jnp.eye(1),
-            jnp.eye(1), jnp.eye(1),
-            _B_zero, _beta_zero,
+            dts(T=1.0, n_steps=4),
+            {},
+            jnp.zeros(1),
+            jnp.zeros(1),
+            jnp.zeros(1),
+            jnp.eye(1),
+            jnp.eye(1),
+            jnp.eye(1),
+            _B_zero,
+            _beta_zero,
         )
 
 

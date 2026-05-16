@@ -185,4 +185,7 @@ changelog
 # Note: uv.lock IS committed (do not ignore) — needed for reproducible installs.
 
 CLAUDE.md
-docs/report/
+/report/
+
+.claude/
+.ruff_cache/

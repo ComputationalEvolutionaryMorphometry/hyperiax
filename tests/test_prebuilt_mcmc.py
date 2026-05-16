@@ -6,7 +6,6 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 
 import hyperiax as hx
@@ -23,11 +22,12 @@ from hyperiax.prebuilt.mcmc import (
 # ── basic kernel semantics ─────────────────────────────────────────
 def test_metropolis_step_always_accepts_proposal_with_higher_target():
     """An "identity" proposal has log_alpha = 0, so accept with prob 1."""
-    state = init_state(jnp.array(0.0), lambda x: -0.5 * x ** 2)
+    state = init_state(jnp.array(0.0), lambda x: -0.5 * x**2)
     out, info = metropolis_step(
-        jax.random.PRNGKey(0), state,
-        propose_fn=lambda key, x: x,           # identity
-        log_target_fn=lambda x: -0.5 * x ** 2,
+        jax.random.PRNGKey(0),
+        state,
+        propose_fn=lambda key, x: x,  # identity
+        log_target_fn=lambda x: -0.5 * x**2,
     )
     assert bool(info["accepted"])
     assert float(out.position) == 0.0
@@ -35,22 +35,25 @@ def test_metropolis_step_always_accepts_proposal_with_higher_target():
 
 def test_metropolis_step_rejects_far_proposals_overwhelmingly():
     """A jump from x=0 to x=10 under log_target = -x²/2 has log_alpha = -50."""
-    state = init_state(jnp.array(0.0), lambda x: -0.5 * x ** 2)
-    def propose(key, x): return jnp.array(10.0)
+    state = init_state(jnp.array(0.0), lambda x: -0.5 * x**2)
+
+    def propose(key, x):
+        return jnp.array(10.0)
+
     keys = jax.random.split(jax.random.PRNGKey(1), 200)
     accepts = sum(
-        int(metropolis_step(k, state, propose, lambda x: -0.5 * x ** 2)[1]["accepted"])
-        for k in keys
+        int(metropolis_step(k, state, propose, lambda x: -0.5 * x**2)[1]["accepted"]) for k in keys
     )
     assert accepts == 0
 
 
 def test_metropolis_step_caches_log_target_on_accept():
     """After an accepted step, state.log_target equals log_target_fn(new position)."""
-    log_target = lambda x: -0.5 * x ** 2
+    log_target = lambda x: -0.5 * x**2
     state = init_state(jnp.array(0.0), log_target)
     out, _ = metropolis_step(
-        jax.random.PRNGKey(0), state,
+        jax.random.PRNGKey(0),
+        state,
         propose_fn=lambda k, x: jnp.array(0.5),
         log_target_fn=log_target,
     )
@@ -93,7 +96,7 @@ def test_state_can_be_tree():
 
     def log_target(t: hx.Tree) -> jax.Array:
         # Target: standard normal on every node's x.
-        return -0.5 * jnp.sum(t.x ** 2)
+        return -0.5 * jnp.sum(t.x**2)
 
     def propose(key, t: hx.Tree) -> hx.Tree:
         return t.set(x=t.x + 0.4 * jax.random.normal(key, t.x.shape))
@@ -108,7 +111,7 @@ def test_state_can_be_tree():
 # ── target convergence ────────────────────────────────────────────
 def test_random_walk_chain_converges_to_standard_normal():
     """RW MCMC targeting N(0, 1) — sample mean and std match within tolerance."""
-    log_target = lambda x: -0.5 * x ** 2
+    log_target = lambda x: -0.5 * x**2
     init = init_state(jnp.array(0.0), log_target)
     kernel = partial(
         metropolis_step,
@@ -155,12 +158,14 @@ def test_gibbs_style_composition_of_two_kernels():
     def kernel(key, state):
         k1, k2 = jax.random.split(key)
         s, i1 = metropolis_step(
-            k1, state,
+            k1,
+            state,
             propose_fn=lambda k, p: {"a": p["a"] + 0.5 * jax.random.normal(k), "b": p["b"]},
             log_target_fn=log_target,
         )
         s, i2 = metropolis_step(
-            k2, s,
+            k2,
+            s,
             propose_fn=lambda k, p: {"a": p["a"], "b": p["b"] + 0.5 * jax.random.normal(k)},
             log_target_fn=log_target,
         )
@@ -176,7 +181,7 @@ def test_gibbs_style_composition_of_two_kernels():
 # ── jit / pytree machinery ────────────────────────────────────────
 def test_mhstate_is_a_pytree():
     """MHState must flatten / unflatten so lax.scan can carry it as state."""
-    s = init_state(jnp.array(1.5), lambda x: -0.5 * x ** 2)
+    s = init_state(jnp.array(1.5), lambda x: -0.5 * x**2)
     leaves, treedef = jax.tree_util.tree_flatten(s)
     assert len(leaves) == 2
     rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
@@ -185,14 +190,17 @@ def test_mhstate_is_a_pytree():
 
 
 def test_metropolis_step_under_outer_jit():
-    log_target = lambda x: -0.5 * x ** 2
+    log_target = lambda x: -0.5 * x**2
     state = init_state(jnp.array(0.0), log_target)
+
     def step(k, s):
         return metropolis_step(
-            k, s,
+            k,
+            s,
             propose_fn=random_walk_proposal(0.5),
             log_target_fn=log_target,
         )
+
     eager_state, _ = step(jax.random.PRNGKey(0), state)
     jit_state, _ = jax.jit(step)(jax.random.PRNGKey(0), state)
     assert jnp.allclose(eager_state.position, jit_state.position)
@@ -202,8 +210,8 @@ def test_metropolis_step_under_outer_jit():
 def test_run_chain_savef_projects_state_to_small_trace():
     """``savef`` should keep only the projection in the trace — verify
     shape + that the kept trace matches per-step projection of full chain."""
-    log_target = lambda d: -0.5 * (d['big'].sum() + d['small'] ** 2)
-    init = init_state({'big': jnp.zeros((100,)), 'small': jnp.array(0.0)}, log_target)
+    log_target = lambda d: -0.5 * (d["big"].sum() + d["small"] ** 2)
+    init = init_state({"big": jnp.zeros((100,)), "small": jnp.array(0.0)}, log_target)
     kernel = partial(
         metropolis_step,
         propose_fn=random_walk_proposal(0.1),
@@ -211,8 +219,11 @@ def test_run_chain_savef_projects_state_to_small_trace():
     )
     # With savef we should only see 'small' in the trace.
     trace, _ = run_chain(
-        jax.random.PRNGKey(0), init, kernel, n_steps=50,
-        savef=lambda s: s.position['small'],
+        jax.random.PRNGKey(0),
+        init,
+        kernel,
+        n_steps=50,
+        savef=lambda s: s.position["small"],
     )
     assert trace.shape == (50,)  # NOT (50, 100); the 'big' field is gone.
 
@@ -231,12 +242,13 @@ def test_run_chain_under_vmap_with_pbar_multi_chain():
 
     n_chains = 3
     n_steps = 50
-    log_target = lambda x: -0.5 * x ** 2
+    log_target = lambda x: -0.5 * x**2
 
     init_positions = jnp.array([-2.0, 0.0, 2.0])
     inits = jax.vmap(lambda x: init_state(x, log_target))(init_positions)
     init_pbars = jax.vmap(lambda i, c: PBar(id=i, carry=c))(
-        jnp.arange(n_chains), inits,
+        jnp.arange(n_chains),
+        inits,
     )
 
     kernel = partial(
@@ -262,17 +274,19 @@ def test_run_chain_under_vmap_with_pbar_multi_chain():
 
 def test_run_chain_traces_kernel_once():
     """run_chain wraps lax.scan; the kernel body should jaxpr-trace exactly once."""
-    log_target = lambda x: -0.5 * x ** 2
+    log_target = lambda x: -0.5 * x**2
     init = init_state(jnp.array(0.0), log_target)
     kernel = partial(
         metropolis_step,
         propose_fn=random_walk_proposal(0.5),
         log_target_fn=log_target,
     )
+
     # Two different lengths should both compile under the same outer jit.
     @jax.jit
     def run10(k, s):
         return run_chain(k, s, kernel, n_steps=10)
+
     chain1, _ = run10(jax.random.PRNGKey(0), init)
     chain2, _ = run10(jax.random.PRNGKey(1), init)
     assert chain1.position.shape == chain2.position.shape == (10,)

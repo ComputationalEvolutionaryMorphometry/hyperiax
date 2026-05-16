@@ -5,7 +5,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import hyperiax as hx
 from hyperiax import Topology, Tree, symmetric_topology
 from hyperiax.prebuilt import phylo_mean
 
@@ -33,7 +32,8 @@ def test_phylo_mean_leaves_untouched():
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=jnp.ones(7))
-        .at[topo.is_leaf].set(estimated_value=leaves)
+        .at[topo.is_leaf]
+        .set(estimated_value=leaves)
     )
 
     out = phylo_mean()(tree)
@@ -48,7 +48,8 @@ def test_phylo_mean_uniform_edges_recovers_simple_mean():
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=jnp.ones(topo.size))
-        .at[topo.is_leaf].set(estimated_value=leaves)
+        .at[topo.is_leaf]
+        .set(estimated_value=leaves)
     )
 
     out = phylo_mean()(tree)
@@ -63,7 +64,8 @@ def test_phylo_mean_with_vector_values():
     tree = (
         Tree.empty(topo, {"estimated_value": (2,), "edge_length": ()})
         .set(edge_length=jnp.ones(topo.size))
-        .at[topo.is_leaf].set(estimated_value=leaves)
+        .at[topo.is_leaf]
+        .set(estimated_value=leaves)
     )
 
     out = phylo_mean()(tree)
@@ -103,7 +105,8 @@ def test_phylo_mean_matches_numpy_reference_random():
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=edge_lengths)
-        .at[topo.is_leaf].set(estimated_value=leaf_vals)
+        .at[topo.is_leaf]
+        .set(estimated_value=leaf_vals)
     )
     hx_result = np.asarray(phylo_mean()(tree)["estimated_value"])
 
@@ -124,7 +127,8 @@ def test_phylo_mean_composes_under_outer_jit():
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=jnp.ones(topo.size))
-        .at[topo.is_leaf].set(estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0]))
+        .at[topo.is_leaf]
+        .set(estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0]))
     )
     sweep = phylo_mean()
 
@@ -159,7 +163,8 @@ def test_phylo_mean_on_unequal_degree_tree_raises_or_runs_gracefully():
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=jnp.ones(topo.size))
-        .at[topo.is_leaf].set(estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0, 5.0]))
+        .at[topo.is_leaf]
+        .set(estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0, 5.0]))
     )
     sweep = phylo_mean()
     # Expect either: the unequal dispatcher rejects the proxy's reshape,

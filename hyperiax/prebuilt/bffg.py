@@ -56,9 +56,9 @@ def _canonical_leaf_messages(
 
     Sigma_leaf = obs_var * jnp.eye(n)
     c_T = jax.vmap(
-        lambda v: jax.vmap(
-            lambda vc: multivariate_normal.logpdf(jnp.zeros(n), vc, Sigma_leaf)
-        )(v.reshape((n, d)).T)
+        lambda v: jax.vmap(lambda vc: multivariate_normal.logpdf(jnp.zeros(n), vc, Sigma_leaf))(
+            v.reshape((n, d)).T
+        )
     )(leaf_values)
 
     return {"H_T": H_T, "F_T": F_T, "c_T": c_T}
@@ -117,9 +117,7 @@ def init_sde_leaves(
     if root_value is not None:
         root_value = jnp.asarray(root_value)
         if "v_0" in tree.schema:
-            tree = tree.set(
-                v_0=jnp.broadcast_to(root_value, (tree.size, n * d))
-            )
+            tree = tree.set(v_0=jnp.broadcast_to(root_value, (tree.size, n * d)))
         if "v_T" in tree.schema:
             # Seed v_T at inner nodes (leaves keep their observed values).
             tree = tree.at[~leaf_mask].set(
@@ -168,9 +166,9 @@ def gaussian_up(n: int, a, d: int = 1) -> SweepFn:
             # per d-column. See van der Meulen & Sommer (2025) §3.
             log_det_phi_inv = jnp.linalg.slogdet(invPhi_0)[1]
             c_0 = jax.vmap(
-                lambda v_T_col, c_T_col: c_T_col
-                + 0.5 * v_T_col @ (H_T_child - H_0) @ v_T_col
-                - 0.5 * log_det_phi_inv,
+                lambda v_T_col, c_T_col: (
+                    c_T_col + 0.5 * v_T_col @ (H_T_child - H_0) @ v_T_col - 0.5 * log_det_phi_inv
+                ),
                 in_axes=(1, 0),
             )(v_T.reshape((n, d)), c_T_child)
             return c_0, F_0, H_0
@@ -275,34 +273,35 @@ def gaussian_down_conditional(n: int, a, d: int = 1) -> SweepFn:
         var = node.edge_length
 
         # Linearization point matching gaussian_up.
-        v_T = solve(H_T_c, F_T_c)                            # (n·d,)
+        v_T = solve(H_T_c, F_T_c)  # (n·d,)
 
         # ── Conditional Gaussian sample (Theorem 14, step 2). With μ(x)=x,
         # the canonical posterior given the parent is
         #     N^can(F + Q(x)⁻¹·x,  H + Q(x)⁻¹).
         x = parent.value
-        Q_true = var * a(x, params)                          # (n, n) — Q(x)
+        Q_true = var * a(x, params)  # (n, n) — Q(x)
         invH = jnp.linalg.solve(jnp.eye(n) + Q_true @ H_T_c, Q_true)  # (n, n)
         mu = dot(invH, F_T_c + solve(Q_true, x))
-        new_value = mu + dot(
-            cholesky(invH, lower=True, check_finite=False), node.noise
-        )
+        new_value = mu + dot(cholesky(invH, lower=True, check_finite=False), node.noise)
 
         # ── Importance weight (Theorem 14, step 3). With μ(x)=x, Φ=I, β=0
         # the two means coincide and logw reduces to the log-ratio of two
         # Gaussians at H⁻¹F that differ only in their covariance term
         # (Q(x) vs Q̃ = Q(v_T)). Linear case ⇒ both covariances equal ⇒
         # logw = 0 identically.
-        Q_aux = var * a(v_T, params)                         # (n, n) — Q̃
-        H_inv = jnp.linalg.inv(H_T_c)                        # H⁻¹ (n, n)
+        Q_aux = var * a(v_T, params)  # (n, n) — Q̃
+        H_inv = jnp.linalg.inv(H_T_c)  # H⁻¹ (n, n)
         C_true = Q_true + H_inv
-        C_aux  = Q_aux  + H_inv
-        logw = jnp.sum(jax.vmap(
-            lambda v_T_col, x_col:
-                multivariate_normal.logpdf(v_T_col, x_col, C_true)
-                - multivariate_normal.logpdf(v_T_col, x_col, C_aux),
-            in_axes=(1, 1),
-        )(v_T.reshape((n, d)), x.reshape((n, d))))
+        C_aux = Q_aux + H_inv
+        logw = jnp.sum(
+            jax.vmap(
+                lambda v_T_col, x_col: (
+                    multivariate_normal.logpdf(v_T_col, x_col, C_true)
+                    - multivariate_normal.logpdf(v_T_col, x_col, C_aux)
+                ),
+                in_axes=(1, 1),
+            )(v_T.reshape((n, d)), x.reshape((n, d)))
+        )
 
         return {"value": new_value, "logw": logw}
 
@@ -341,12 +340,8 @@ def backward_filter(
         beta: optional ``(t, params) -> (n,)`` affine drift offset.
     """
     if B is None and beta is None:
-        return _backward_filter_closed_form(
-            dts, c_T, v_T, F_T, H_T, tildea0, tildeaT
-        )
-    return _backward_filter_ode(
-        dts, params, c_T, v_T, F_T, H_T, tildea0, tildeaT, B, beta
-    )
+        return _backward_filter_closed_form(dts, c_T, v_T, F_T, H_T, tildea0, tildeaT)
+    return _backward_filter_ode(dts, params, c_T, v_T, F_T, H_T, tildea0, tildeaT, B, beta)
 
 
 def _backward_filter_closed_form(dts, c_T, v_T, F_T, H_T, tildea0, tildeaT):
@@ -362,9 +357,9 @@ def _backward_filter_closed_form(dts, c_T, v_T, F_T, H_T, tildea0, tildeaT):
 
     log_det_phi_inv = jnp.linalg.slogdet(Phi_inv_0)[1]
     c_0 = jax.vmap(
-        lambda v_T_col, c_T_col: c_T_col
-        + 0.5 * v_T_col @ (H_T - H_0) @ v_T_col
-        - 0.5 * log_det_phi_inv,
+        lambda v_T_col, c_T_col: (
+            c_T_col + 0.5 * v_T_col @ (H_T - H_0) @ v_T_col - 0.5 * log_det_phi_inv
+        ),
         in_axes=(1, 0),
     )(v_T.reshape((n, d)), c_T)
 
@@ -407,7 +402,7 @@ def _backward_filter_ode(dts, params, c_T, v_T, F_T, H_T, tildea0, tildeaT, B, b
     def vector_field(tau, y, args):
         # Recover (H, F, c) from the packed state.
         Ht = y[:nn].reshape((n, n))
-        Ft_flat = y[nn:nn + nd]
+        Ft_flat = y[nn : nn + nd]
         Ft_mat = Ft_flat.reshape((n, d))
 
         t = T - tau
@@ -449,11 +444,11 @@ def _backward_filter_ode(dts, params, c_T, v_T, F_T, H_T, tildea0, tildeaT, B, b
     per_step_end = solution_t[1:]  # length n_steps; H_t[i] at t = ts[i+1] = end of step i
 
     H_0 = state_t0[:nn].reshape((n, n))
-    F_0 = state_t0[nn:nn + nd]
-    c_0 = state_t0[nn + nd:]
+    F_0 = state_t0[nn : nn + nd]
+    c_0 = state_t0[nn + nd :]
 
     H_t = per_step_end[:, :nn].reshape((n_steps, n, n))
-    F_t = per_step_end[:, nn:nn + nd]
+    F_t = per_step_end[:, nn : nn + nd]
 
     return {"c_0": c_0, "F_0": F_0, "H_0": H_0, "F_t": F_t, "H_t": H_t}
 
@@ -485,9 +480,7 @@ def forward_guided(
     ``(Xs, logpsi)``.
     """
     if B is None and beta is None:
-        assert F_T is not None and H_T is not None, (
-            "Closed-form forward_guided needs F_T and H_T"
-        )
+        assert F_T is not None and H_T is not None, "Closed-form forward_guided needs F_T and H_T"
         return _forward_guided_closed_form(
             x0, dts, dWs, b, sigma, params, a, F_T, H_T, tildea0, tildeaT
         )
@@ -499,9 +492,7 @@ def forward_guided(
     )
 
 
-def _forward_guided_closed_form(
-    x0, dts, dWs, b, sigma, params, a, F_T, H_T, tildea0, tildeaT
-):
+def _forward_guided_closed_form(x0, dts, dWs, b, sigma, params, a, F_T, H_T, tildea0, tildeaT):
     n = tildeaT.shape[0]
     d = x0.size // n
     ts = jnp.cumsum(dts)
@@ -511,9 +502,7 @@ def _forward_guided_closed_form(
         return tildeaT * (t / T) + tildea0 * (1 - t / T)
 
     def Phi_inv(t):
-        integrated = (-(t ** 2 - T ** 2) / (2 * T)) * tildeaT + (
-            ((T - t) ** 2) / (2 * T)
-        ) * tildea0
+        integrated = (-(t**2 - T**2) / (2 * T)) * tildeaT + (((T - t) ** 2) / (2 * T)) * tildea0
         return jnp.eye(n) + H_T @ integrated
 
     def step(carry, val):
@@ -524,10 +513,22 @@ def _forward_guided_closed_form(
         H_t_i = jnp.linalg.solve(Phi_inv_t, H_T)
         F_t_i = solve(Phi_inv_t, F_T)
         return _bridge_step_body(
-            i, X, logpsi, dt, dW, t,
-            H_t_i, F_t_i, b, sigma, a, params, tildea(t),
+            i,
+            X,
+            logpsi,
+            dt,
+            dW,
+            t,
+            H_t_i,
+            F_t_i,
+            b,
+            sigma,
+            a,
+            params,
+            tildea(t),
             tildeb=lambda tt, xx, pp: jnp.zeros_like(xx),
-            n=n, d=d,
+            n=n,
+            d=d,
         )
 
     (_, X, logpsi), (_, Xs, _) = jax.lax.scan(step, (0, x0, 0.0), (dts, dWs))
@@ -559,10 +560,22 @@ def _forward_guided_ode(
         H_t_i = H_t_arr[i]
         F_t_i = F_t_arr[i]
         return _bridge_step_body(
-            i, X, logpsi, dt, dW, t,
-            H_t_i, F_t_i, b, sigma, a, params, tildea(t),
+            i,
+            X,
+            logpsi,
+            dt,
+            dW,
+            t,
+            H_t_i,
+            F_t_i,
+            b,
+            sigma,
+            a,
+            params,
+            tildea(t),
             tildeb=tildeb,
-            n=n, d=d,
+            n=n,
+            d=d,
         )
 
     (_, X, logpsi), (_, Xs, _) = jax.lax.scan(step, (0, x0, 0.0), (dts, dWs))
@@ -570,9 +583,23 @@ def _forward_guided_ode(
 
 
 def _bridge_step_body(
-    i, X, logpsi, dt, dW, t,
-    H_t_i, F_t_i, b, sigma, a, params, tildea_t,
-    *, tildeb, n, d,
+    i,
+    X,
+    logpsi,
+    dt,
+    dW,
+    t,
+    H_t_i,
+    F_t_i,
+    b,
+    sigma,
+    a,
+    params,
+    tildea_t,
+    *,
+    tildeb,
+    n,
+    d,
 ):
     """Single Euler step of the guided SDE; shared between closed-form and ODE paths."""
     tilderx = F_t_i - dot(H_t_i, X)
@@ -587,17 +614,21 @@ def _bridge_step_body(
 
     amtildea = _a - tildea_t
     drift_diff = b(t, X, params) - tildeb(t, X, params)
-    logpsi_tp1 = logpsi + (
-        jnp.dot(drift_diff, tilderx)
-        - 0.5 * d * jnp.einsum("ij,ji->", amtildea, H_t_i)
-        + 0.5
-        * jnp.einsum(
-            "ij,jd,id->",
-            amtildea,
-            tilderx.reshape((n, d)),
-            tilderx.reshape((n, d)),
+    logpsi_tp1 = (
+        logpsi
+        + (
+            jnp.dot(drift_diff, tilderx)
+            - 0.5 * d * jnp.einsum("ij,ji->", amtildea, H_t_i)
+            + 0.5
+            * jnp.einsum(
+                "ij,jd,id->",
+                amtildea,
+                tilderx.reshape((n, d)),
+                tilderx.reshape((n, d)),
+            )
         )
-    ) * dt
+        * dt
+    )
     return (i + 1, Xtp1, logpsi_tp1), (t, X, logpsi)
 
 
@@ -696,7 +727,13 @@ def sde_down_unconditional(n_steps: int, b, sigma, *, a=None) -> SweepFn:
 
 # ── SDE BFFG: conditional forward sampling (forward-guided bridge) ──
 def sde_down_conditional(
-    n_steps: int, b, sigma, a, *, B=None, beta=None,
+    n_steps: int,
+    b,
+    sigma,
+    a,
+    *,
+    B=None,
+    beta=None,
 ) -> SweepFn:
     """Conditional forward sampling via :func:`forward_guided`.
 
@@ -731,14 +768,32 @@ def sde_down_conditional(
         else:
             # Re-derive F_t, H_t for this edge via the ODE filter.
             filt = backward_filter(
-                _dts, params, node.c_T, node.v_T, node.F_T, node.H_T,
-                tildea0=tildea0, tildeaT=tildeaT, B=B, beta=beta,
+                _dts,
+                params,
+                node.c_T,
+                node.v_T,
+                node.F_T,
+                node.H_T,
+                tildea0=tildea0,
+                tildeaT=tildeaT,
+                B=B,
+                beta=beta,
             )
             guide_kwargs.update(
-                F_t=filt["F_t"], H_t=filt["H_t"], B=B, beta=beta,
+                F_t=filt["F_t"],
+                H_t=filt["H_t"],
+                B=B,
+                beta=beta,
             )
         Xs, logpsi = forward_guided(
-            x0, _dts, _dWs, b, sigma, params, a, **guide_kwargs,
+            x0,
+            _dts,
+            _dWs,
+            b,
+            sigma,
+            params,
+            a,
+            **guide_kwargs,
         )
         return {"value": Xs, "logpsi": logpsi}
 

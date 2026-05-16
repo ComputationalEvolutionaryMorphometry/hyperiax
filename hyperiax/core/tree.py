@@ -6,8 +6,8 @@ the Tree composes cleanly with ``@jax.jit`` and ``jax.lax.scan``.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 import jax
 import jax.numpy as jnp
@@ -16,16 +16,24 @@ from .errors import MissingField, SchemaMismatch
 from .schema import FieldSpec, Schema
 from .topology import Topology
 
-
 # Field names that would shadow ``Tree`` attributes / methods under
 # attribute access (``tree.value``). Schema field names are checked against
 # this set at construction time so the shadowing fails loudly instead of
 # silently masking the data.
-_RESERVED_FIELD_NAMES = frozenset({
-    "topology", "schema", "data", "size",          # dataclass fields + property
-    "set", "at", "update", "drop",                 # mutators
-    "empty", "from_data",                          # classmethods
-})
+_RESERVED_FIELD_NAMES = frozenset(
+    {
+        "topology",
+        "schema",
+        "data",
+        "size",  # dataclass fields + property
+        "set",
+        "at",
+        "update",
+        "drop",  # mutators
+        "empty",
+        "from_data",  # classmethods
+    }
+)
 
 
 @dataclass(frozen=True, eq=False)
@@ -50,17 +58,14 @@ class Tree:
     def empty(
         cls,
         topology: Topology,
-        schema: "Schema | Mapping[str, tuple | FieldSpec | None]",
-    ) -> "Tree":
+        schema: Schema | Mapping[str, tuple | FieldSpec | None],
+    ) -> Tree:
         """Allocate a Tree of zeros with the declared schema."""
         if not isinstance(schema, Schema):
             schema = Schema.from_dict(schema)
         cls._check_reserved(schema)
         n = topology.size
-        data = {
-            name: jnp.zeros((n, *spec.shape), dtype=spec.dtype)
-            for name, spec in schema.fields
-        }
+        data = {name: jnp.zeros((n, *spec.shape), dtype=spec.dtype) for name, spec in schema.fields}
         return cls(topology=topology, schema=schema, data=data)
 
     @classmethod
@@ -68,7 +73,7 @@ class Tree:
         cls,
         topology: Topology,
         data: Mapping[str, jax.Array],
-    ) -> "Tree":
+    ) -> Tree:
         """Build a Tree from an existing data dict; schema is inferred from arrays."""
         schema_dict = {}
         for name, arr in data.items():
@@ -97,8 +102,7 @@ class Tree:
             return self.data[name]
         except KeyError:
             raise MissingField(
-                f"Field {name!r} is not in this tree. "
-                f"Known fields: {self.schema.names}"
+                f"Field {name!r} is not in this tree. Known fields: {self.schema.names}"
             ) from None
 
     def __getattr__(self, name: str) -> jax.Array:
@@ -125,7 +129,7 @@ class Tree:
         return f"Tree(size={self.size}, fields={{{fields}}})"
 
     # ── functional mutators ──────────────────────────────────────────
-    def set(self, **fields: jax.Array) -> "Tree":
+    def set(self, **fields: jax.Array) -> Tree:
         """Replace whole fields. Each value must already match ``(N, *spec.shape)``."""
         new_data = dict(self.data)
         for name, value in fields.items():
@@ -145,7 +149,7 @@ class Tree:
         return Tree(topology=self.topology, schema=self.schema, data=new_data)
 
     @property
-    def at(self) -> "_AtAccessor":
+    def at(self) -> _AtAccessor:
         """JAX-style scatter accessor: ``tree.at[indices].set(field=values)``.
 
         Mirrors :attr:`jax.numpy.ndarray.at`. The returned indexer supports
@@ -155,7 +159,7 @@ class Tree:
         """
         return _AtAccessor(self)
 
-    def update(self, **fields) -> "Tree":
+    def update(self, **fields) -> Tree:
         """Add brand-new fields. Values can be a FieldSpec, a shape tuple, or an array.
 
         Note: this changes the pytree structure and will invalidate any JIT
@@ -167,9 +171,7 @@ class Tree:
         new_data = dict(self.data)
         for name, spec_or_value in fields.items():
             if name in self.schema:
-                raise ValueError(
-                    f"Field {name!r} already in schema; use .set() to overwrite"
-                )
+                raise ValueError(f"Field {name!r} already in schema; use .set() to overwrite")
             if spec_or_value is None or isinstance(spec_or_value, (FieldSpec, tuple)):
                 spec = FieldSpec._coerce(spec_or_value)
                 merged[name] = spec
@@ -186,7 +188,7 @@ class Tree:
         self._check_reserved(new_schema)
         return Tree(topology=self.topology, schema=new_schema, data=new_data)
 
-    def drop(self, *names: str) -> "Tree":
+    def drop(self, *names: str) -> Tree:
         """Drop fields; returns a Tree with reduced schema and data."""
         new_data = {k: v for k, v in self.data.items() if k not in names}
         return Tree(topology=self.topology, schema=self.schema.without(*names), data=new_data)

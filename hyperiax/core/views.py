@@ -11,7 +11,7 @@ Attribute access (``node.value``) is preferred over item access
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 import jax
 import jax.numpy as jnp
@@ -138,29 +138,37 @@ class ChildrenAxis:
     def sum(self, axis: int = 0) -> jax.Array:
         self._check_axis(axis)
         return jax.ops.segment_sum(
-            self._flat, self._segments,
-            num_segments=self._num_segments, indices_are_sorted=True,
+            self._flat,
+            self._segments,
+            num_segments=self._num_segments,
+            indices_are_sorted=True,
         )
 
     def prod(self, axis: int = 0) -> jax.Array:
         self._check_axis(axis)
         return jax.ops.segment_prod(
-            self._flat, self._segments,
-            num_segments=self._num_segments, indices_are_sorted=True,
+            self._flat,
+            self._segments,
+            num_segments=self._num_segments,
+            indices_are_sorted=True,
         )
 
     def max(self, axis: int = 0) -> jax.Array:
         self._check_axis(axis)
         return jax.ops.segment_max(
-            self._flat, self._segments,
-            num_segments=self._num_segments, indices_are_sorted=True,
+            self._flat,
+            self._segments,
+            num_segments=self._num_segments,
+            indices_are_sorted=True,
         )
 
     def min(self, axis: int = 0) -> jax.Array:
         self._check_axis(axis)
         return jax.ops.segment_min(
-            self._flat, self._segments,
-            num_segments=self._num_segments, indices_are_sorted=True,
+            self._flat,
+            self._segments,
+            num_segments=self._num_segments,
+            indices_are_sorted=True,
         )
 
     def mean(self, axis: int = 0) -> jax.Array:
@@ -169,7 +177,8 @@ class ChildrenAxis:
         counts = jax.ops.segment_sum(
             jnp.ones_like(self._segments, dtype=self._flat.dtype),
             self._segments,
-            num_segments=self._num_segments, indices_are_sorted=True,
+            num_segments=self._num_segments,
+            indices_are_sorted=True,
         )
         # Reshape counts to broadcast against the trailing dims.
         counts = counts.reshape((self._num_segments,) + (1,) * len(self._trailing))

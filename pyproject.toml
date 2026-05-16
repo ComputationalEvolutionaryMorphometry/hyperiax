@@ -3,10 +3,10 @@ name = "hyperiax"
 authors = [
   { name = "Stefan Sommer", email = "sommer@di.ku.dk" },
   { name = "Marcus Holte Teller", email = "marcus@di.ku.dk" },
-  { name = "Gefan Yang", email = "***@di.ku.dk" },
-  { name = "Michael Baand Severinsen", email = "***@di.ku.dk" },
-  { name = "Morten Akhøj Pedersen", email = "***@di.ku.dk" },
-  { name = "Nicklas Boserup", email = "***@di.ku.dk" },
+  { name = "Gefan Yang", email = "gy@di.ku.dk" },
+  { name = "Michael Baand Severinsen", email = "michael.baand@sund.ku.dk" },
+  { name = "Morten Akhøj Pedersen", email = "morten.akhoej@di.ku.dk" },
+  { name = "Nicklas Boserup", email = "nicklas.boserup@sund.ku.dk" },
 ]
 description = "Tree traversals using JAX"
 readme = "README.md"
@@ -30,39 +30,32 @@ dynamic = ["version"]
 io = [
     "ete3>=3.1",
 ]
-# BFFG prebuilt models — diffrax powers the ODE-integrated backward
-# filter; the closed-form path doesn't need it.
-# equinox 0.13.8 ships a broken wheel (references a non-existent
-# `equinox.internal._loop` submodule); pin below it until upstream fixes.
-prebuilt-bffg = [
+# All prebuilt models — diffrax powers the ODE-integrated BFFG backward
+# filter; jax-tqdm decorates MCMC run_chain with per-chain progress bars
+# (imports are guarded so the core path still runs without them).
+# equinox 0.13.8 ships a broken wheel; pin below it until upstream fixes.
+# Install via:   uv sync --extra prebuilt
+prebuilt = [
     "diffrax>=0.6",
+    # The equinox / jaxtyping / wadler-lindig / optimistix family must move
+    # together. Current bleeding edges (equinox 0.13.8, jaxtyping 0.3.x,
+    # wadler-lindig 0.1.7, optimistix 0.1.0) are mutually incompatible with
+    # the diffrax 0.7.x we use. Pin the whole chain at the last known-good
+    # set until upstream restabilises.
     "equinox<0.13.8",
-]
-# MCMC prebuilt — jax_tqdm decorates run_chain with per-chain progress bars
-# (the import is guarded; mcmc.py runs without it, just without progress).
-prebuilt-mcmc = [
+    "jaxtyping<0.3",
+    "wadler-lindig<0.1.7",
+    "optimistix<0.1",
     "jax-tqdm>=0.4",
 ]
 # Notebook tutorials in docs/source/notebooks/.
-# Install via:   uv sync --group notebooks
-notebooks = [
+# Install via:   uv sync --extra notebook
+notebook = [
     "matplotlib>=3.8",
     "jupyter>=1.0",
     "ipykernel>=6.29",
-    "diffrax>=0.6",
-    "jax-tqdm>=0.4",
     "joblib>=1.4",
     "optax>=0.2",
-]
-# Sphinx HTML docs (theme + notebook rendering + API autodoc).
-# Install via:   uv sync --extra docs
-# Build via:     make -C docs html
-docs = [
-    "sphinx>=7.3",
-    "furo>=2024.5",
-    "myst-nb>=1.1",
-    "sphinx-autodoc-typehints>=2.1",
-    "sphinx-copybutton>=0.5",
 ]
 
 [project.urls]
@@ -81,15 +74,27 @@ include = ["hyperiax*"]
 
 [tool.setuptools_scm]
 version_file = "hyperiax/_version.py"
+# Match v-prefixed tags (e.g. v3.0.0). Used by the PyPI publish workflow.
+tag_regex = "^v(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+(?:[a-z0-9.+-]*)?)$"
+# Reported when scm lookup fails entirely (tarball install w/o .git).
+fallback_version = "3.0.0"
 
 # ── uv-specific configuration ─────────────────────────────────────────────
 # Dev-only dependencies (PEP 735 dependency groups).
+# `dev` bundles test, lint and docs tooling — everything a contributor needs.
 # Install via:   uv sync --group dev
-# All extras:    uv sync --all-extras --group dev
+# With extras:   uv sync --all-extras --group dev
 [dependency-groups]
 dev = [
     "pytest>=8",
     "pytest-xdist>=3",
+    "ruff>=0.6",
+    "pre-commit>=3.7",
+    "sphinx>=7.3",
+    "furo>=2024.5",
+    "myst-nb>=1.1",
+    "sphinx-autodoc-typehints>=2.1",
+    "sphinx-copybutton>=0.5",
 ]
 
 [tool.uv]
@@ -100,3 +105,28 @@ required-version = ">=0.4"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers"]
+
+# ── ruff ──────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["hyperiax/_version.py", "docs/build", "docs/source/notebooks"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",  # line length — formatter handles wrapping; long math/string lines are fine
+    "E731",  # lambda assignment — common shorthand for state-dependent JAX functions
+    "B008",  # function call in default arg — common JAX idiom
+    "B905",  # zip without strict — keep as-is for now (jax pytree code passes equal-length iterables)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "E402"]  # tests use bugbear-flagged asserts and pytest.importorskip imports

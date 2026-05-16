@@ -4,7 +4,6 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-import hyperiax as hx
 from hyperiax import (
     HyperiaxError,
     SchemaMismatch,
@@ -13,7 +12,6 @@ from hyperiax import (
     symmetric_topology,
     up,
 )
-
 
 # Canonical unequal-degree tree used by the T-7 family:
 #       0
@@ -38,7 +36,6 @@ def test_unequal_topology_pbuckets_layout():
     topo = Topology.from_parents(PARENTS)
     assert not topo.equal_degree
     # Level 2 children [3..7] reduce into parents [1, 2] via segments [0,0,0,1,1]
-    jnp_arr = jnp.asarray
     assert list(topo.pbuckets[3:8]) == [0, 0, 0, 1, 1]
     assert list(topo.pbuckets_ref[2]) == [1, 2]
 
@@ -140,9 +137,7 @@ def test_unequal_up_sweep_with_multidim_trailing():
     topo = Topology.from_parents(PARENTS)
     tree = Tree.empty(topo, {"value": (2,)})
     # Each leaf gets a 2-vector; values chosen to be inspectable.
-    leaf_vals = jnp.array(
-        [[1, 10], [2, 20], [3, 30], [4, 40], [5, 50]], dtype=jnp.float32
-    )
+    leaf_vals = jnp.array([[1, 10], [2, 20], [3, 30], [4, 40], [5, 50]], dtype=jnp.float32)
     tree = tree.at[topo.is_leaf].set(value=leaf_vals)
 
     @up(reads_children=("value",), writes=("value",))
@@ -255,8 +250,8 @@ def test_same_user_code_runs_on_equal_and_unequal_topologies():
     def sum_up(node, children, params):
         return {"value": children.value.sum(0)}
 
-    sym = symmetric_topology(depth=2, degree=2)   # equal-degree
-    rag = Topology.from_parents(PARENTS)            # unequal-degree
+    sym = symmetric_topology(depth=2, degree=2)  # equal-degree
+    rag = Topology.from_parents(PARENTS)  # unequal-degree
 
     sym_tree = Tree.empty(sym, {"value": ()}).at[sym.is_leaf].set(value=jnp.ones(4))
     rag_tree = Tree.empty(rag, {"value": ()}).at[rag.is_leaf].set(value=jnp.ones(5))

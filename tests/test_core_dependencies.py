@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-
 # Heavy / optional dependencies that must not appear in core.
 FORBIDDEN_IMPORTS = (
     "matplotlib",
@@ -64,8 +63,8 @@ def test_core_does_not_import(forbidden: str) -> None:
                 continue
             if top == forbidden:
                 offenders.append(f"{path.relative_to(path.parents[2])}:{line_no}: {top}")
-    assert not offenders, (
-        f"hyperiax.core must not import {forbidden!r}; found:\n" + "\n".join(offenders)
+    assert not offenders, f"hyperiax.core must not import {forbidden!r}; found:\n" + "\n".join(
+        offenders
     )
 
 
@@ -91,19 +90,16 @@ def test_core_only_imports_allowed_top_level_packages() -> None:
                 continue
             origin = getattr(spec, "origin", None)
             if origin in (None, "built-in", "frozen"):
-                continue                                # stdlib
+                continue  # stdlib
             try:
                 origin_path = Path(origin).resolve()
                 if base in origin_path.parents:
-                    continue                            # stdlib (lives under sys.base_prefix)
+                    continue  # stdlib (lives under sys.base_prefix)
             except (OSError, ValueError):
                 pass
-            offenders.append(
-                f"{path.name}:{line_no}: imports non-stdlib non-allowed {top!r}"
-            )
+            offenders.append(f"{path.name}:{line_no}: imports non-stdlib non-allowed {top!r}")
     assert not offenders, (
-        f"core/ may only import jax, numpy, hyperiax, or stdlib; found:\n"
-        + "\n".join(offenders)
+        "core/ may only import jax, numpy, hyperiax, or stdlib; found:\n" + "\n".join(offenders)
     )
 
 
@@ -128,9 +124,7 @@ def test_io_does_not_import_prebuilt() -> None:
                     if isinstance(node, ast.ImportFrom) and node.lineno == line_no:
                         if (node.module or "").startswith("hyperiax.prebuilt"):
                             offenders.append(f"{path.name}:{line_no}: {node.module}")
-    assert not offenders, (
-        "io/ must not import from hyperiax.prebuilt:\n" + "\n".join(offenders)
-    )
+    assert not offenders, "io/ must not import from hyperiax.prebuilt:\n" + "\n".join(offenders)
 
 
 def test_prebuilt_does_not_import_io() -> None:
@@ -145,9 +139,7 @@ def test_prebuilt_does_not_import_io() -> None:
                     if isinstance(node, ast.ImportFrom) and node.lineno == line_no:
                         if (node.module or "").startswith("hyperiax.io"):
                             offenders.append(f"{path.name}:{line_no}: {node.module}")
-    assert not offenders, (
-        "prebuilt/ must not import from hyperiax.io:\n" + "\n".join(offenders)
-    )
+    assert not offenders, "prebuilt/ must not import from hyperiax.io:\n" + "\n".join(offenders)
 
 
 # Optional deps that must stay function-local (lazy) in L2 modules.
@@ -186,6 +178,5 @@ def test_l2_does_not_import_optional_deps_at_module_top(forbidden: str) -> None:
                 offenders.append(f"{path.relative_to(path.parents[2])}:{node.lineno}")
     assert not offenders, (
         f"L2 modules must lazy-import {forbidden!r} (function-local or "
-        f"try/except-guarded). Found unguarded top-level imports at:\n"
-        + "\n".join(offenders)
+        f"try/except-guarded). Found unguarded top-level imports at:\n" + "\n".join(offenders)
     )
