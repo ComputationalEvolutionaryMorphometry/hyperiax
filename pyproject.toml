@@ -30,14 +30,13 @@ dynamic = ["version"]
 io = [
     "ete3>=3.1",
 ]
-# Shape / LDDMM prebuilt models (trimesh for mesh sphere, etc.).
-prebuilt-shape = [
-    "trimesh>=4.0",
-]
 # BFFG prebuilt models — diffrax powers the ODE-integrated backward
 # filter; the closed-form path doesn't need it.
+# equinox 0.13.8 ships a broken wheel (references a non-existent
+# `equinox.internal._loop` submodule); pin below it until upstream fixes.
 prebuilt-bffg = [
     "diffrax>=0.6",
+    "equinox<0.13.8",
 ]
 # MCMC prebuilt — jax_tqdm decorates run_chain with per-chain progress bars
 # (the import is guarded; mcmc.py runs without it, just without progress).
@@ -54,6 +53,16 @@ notebooks = [
     "jax-tqdm>=0.4",
     "joblib>=1.4",
     "optax>=0.2",
+]
+# Sphinx HTML docs (theme + notebook rendering + API autodoc).
+# Install via:   uv sync --extra docs
+# Build via:     make -C docs html
+docs = [
+    "sphinx>=7.3",
+    "furo>=2024.5",
+    "myst-nb>=1.1",
+    "sphinx-autodoc-typehints>=2.1",
+    "sphinx-copybutton>=0.5",
 ]
 
 [project.urls]

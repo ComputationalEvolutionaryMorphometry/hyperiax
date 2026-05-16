@@ -146,7 +146,7 @@ def run_chain(
         return new_state, (save(new_state), info)
 
     if _HAS_JAX_TQDM:
-        body = _scan_tqdm(n=n_steps, desc="Running MCMC chain")(body)
+        body = _scan_tqdm(n=n_steps, desc="Running MCMC chain", tqdm_type='std')(body)
 
     xs = (jnp.arange(n_steps), keys)
     _, (trace, info) = jax.lax.scan(body, init, xs)

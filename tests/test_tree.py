@@ -30,7 +30,7 @@ def test_from_data_rejects_wrong_leading_axis(topo):
         Tree.from_data(topo, {"value": jnp.ones((5, 3))})
 
 
-# ── set / set_at / shape validation (T-3) ───────────────────────────
+# ── set / at[].set / shape validation (T-3) ─────────────────────────
 def test_set_validates_shape(topo):
     tree = Tree.empty(topo, {"value": (2,)})
     with pytest.raises(SchemaMismatch):
@@ -57,10 +57,10 @@ def test_set_returns_new_tree_original_untouched(topo):
     assert jnp.all(new["value"] == 1)
 
 
-def test_set_at_with_boolean_mask(topo):
+def test_at_set_with_boolean_mask(topo):
     tree = Tree.empty(topo, {"value": (2,)})
     leaf_vals = jnp.ones((int(topo.is_leaf.sum()), 2))
-    new = tree.set_at(topo.is_leaf, value=leaf_vals)
+    new = tree.at[topo.is_leaf].set(value=leaf_vals)
     assert jnp.all(new["value"][topo.is_leaf] == 1)
     assert jnp.all(new["value"][~topo.is_leaf] == 0)
 

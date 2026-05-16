@@ -29,7 +29,7 @@ def _make_tree_with_leaf_values():
     topo = Topology.from_parents(PARENTS)
     tree = Tree.empty(topo, {"value": ()})
     leaf_vals = jnp.array([10, 20, 30, 100, 200], dtype=jnp.float32)
-    tree = tree.set_at(topo.is_leaf, value=leaf_vals)
+    tree = tree.at[topo.is_leaf].set(value=leaf_vals)
     return topo, tree
 
 
@@ -102,7 +102,7 @@ def test_unequal_up_sweep_prod():
     topo = Topology.from_parents(PARENTS)
     tree = Tree.empty(topo, {"value": ()})
     leaf_vals = jnp.array([2.0, 3.0, 5.0, 7.0, 11.0])
-    tree = tree.set_at(topo.is_leaf, value=leaf_vals)
+    tree = tree.at[topo.is_leaf].set(value=leaf_vals)
 
     @up(reads_children=("value",), writes=("value",))
     def prod_up(node, children, params):
@@ -119,7 +119,7 @@ def test_unequal_up_sweep_combines_node_and_children():
     """node.bias + children.value.sum(0) in unequal-degree mode."""
     topo = Topology.from_parents(PARENTS)
     tree = Tree.empty(topo, {"value": (), "bias": ()})
-    tree = tree.set_at(topo.is_leaf, value=jnp.ones(5))
+    tree = tree.at[topo.is_leaf].set(value=jnp.ones(5))
     tree = tree.set(bias=jnp.arange(8, dtype=jnp.float32))
 
     @up(reads=("bias",), reads_children=("value",), writes=("value",))
@@ -143,7 +143,7 @@ def test_unequal_up_sweep_with_multidim_trailing():
     leaf_vals = jnp.array(
         [[1, 10], [2, 20], [3, 30], [4, 40], [5, 50]], dtype=jnp.float32
     )
-    tree = tree.set_at(topo.is_leaf, value=leaf_vals)
+    tree = tree.at[topo.is_leaf].set(value=leaf_vals)
 
     @up(reads_children=("value",), writes=("value",))
     def sum_up(node, children, params):
@@ -167,7 +167,7 @@ def test_unequal_up_sweep_with_mixed_depth_leaves():
     assert not topo.equal_degree
     tree = Tree.empty(topo, {"value": ()})
     # is_leaf = [F, F, T, T, T, T] → leaves are at indices 2, 3, 4, 5.
-    tree = tree.set_at(topo.is_leaf, value=jnp.array([7.0, 100.0, 200.0, 300.0]))
+    tree = tree.at[topo.is_leaf].set(value=jnp.array([7.0, 100.0, 200.0, 300.0]))
 
     @up(reads_children=("value",), writes=("value",))
     def sum_up(node, children, params):
@@ -217,13 +217,13 @@ def test_unequal_up_sweep_jit_cache_hits_on_identical_topology():
         return {"value": children.value.sum(0)}
 
     topo1 = Topology.from_parents(PARENTS)
-    tree1 = Tree.empty(topo1, {"value": ()}).set_at(topo1.is_leaf, value=jnp.ones(5))
+    tree1 = Tree.empty(topo1, {"value": ()}).at[topo1.is_leaf].set(value=jnp.ones(5))
     sum_up(tree1)["value"].block_until_ready()
     initial = trace_count
     assert initial > 0
 
     topo2 = Topology.from_parents(PARENTS)
-    tree2 = Tree.empty(topo2, {"value": ()}).set_at(topo2.is_leaf, value=jnp.ones(5))
+    tree2 = Tree.empty(topo2, {"value": ()}).at[topo2.is_leaf].set(value=jnp.ones(5))
     for _ in range(5):
         sum_up(tree2)["value"].block_until_ready()
     assert trace_count == initial
@@ -255,11 +255,11 @@ def test_same_user_code_runs_on_equal_and_unequal_topologies():
     def sum_up(node, children, params):
         return {"value": children.value.sum(0)}
 
-    sym = symmetric_topology(height=2, degree=2)   # equal-degree
+    sym = symmetric_topology(depth=2, degree=2)   # equal-degree
     rag = Topology.from_parents(PARENTS)            # unequal-degree
 
-    sym_tree = Tree.empty(sym, {"value": ()}).set_at(sym.is_leaf, value=jnp.ones(4))
-    rag_tree = Tree.empty(rag, {"value": ()}).set_at(rag.is_leaf, value=jnp.ones(5))
+    sym_tree = Tree.empty(sym, {"value": ()}).at[sym.is_leaf].set(value=jnp.ones(4))
+    rag_tree = Tree.empty(rag, {"value": ()}).at[rag.is_leaf].set(value=jnp.ones(5))
 
     out_sym = sum_up(sym_tree)
     out_rag = sum_up(rag_tree)

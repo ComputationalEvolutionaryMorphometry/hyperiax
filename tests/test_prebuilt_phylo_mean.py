@@ -17,7 +17,7 @@ def test_phylo_mean_matches_hand_computation_on_7_node_tree():
     topo = Topology.from_parents([0, 0, 0, 1, 1, 2, 2])
     tree = Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
     tree = tree.set(edge_length=jnp.array([0.0, 0.5, 0.5, 1.0, 1.0, 2.0, 2.0]))
-    tree = tree.set_at(topo.is_leaf, estimated_value=jnp.array([10.0, 20.0, 30.0, 40.0]))
+    tree = tree.at[topo.is_leaf].set(estimated_value=jnp.array([10.0, 20.0, 30.0, 40.0]))
 
     out = phylo_mean()(tree)
 
@@ -33,7 +33,7 @@ def test_phylo_mean_leaves_untouched():
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=jnp.ones(7))
-        .set_at(topo.is_leaf, estimated_value=leaves)
+        .at[topo.is_leaf].set(estimated_value=leaves)
     )
 
     out = phylo_mean()(tree)
@@ -43,12 +43,12 @@ def test_phylo_mean_leaves_untouched():
 def test_phylo_mean_uniform_edges_recovers_simple_mean():
     """When every edge has the same length, the weighted mean reduces to
     a simple recursive average — root equals the leaf mean."""
-    topo = symmetric_topology(height=3, degree=2)
+    topo = symmetric_topology(depth=3, degree=2)
     leaves = jnp.arange(8, dtype=jnp.float32)
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=jnp.ones(topo.size))
-        .set_at(topo.is_leaf, estimated_value=leaves)
+        .at[topo.is_leaf].set(estimated_value=leaves)
     )
 
     out = phylo_mean()(tree)
@@ -58,12 +58,12 @@ def test_phylo_mean_uniform_edges_recovers_simple_mean():
 def test_phylo_mean_with_vector_values():
     """Multi-dimensional ``estimated_value``: broadcasting must handle the
     trailing dims."""
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
     leaves = jnp.arange(8, dtype=jnp.float32).reshape(4, 2)
     tree = (
         Tree.empty(topo, {"estimated_value": (2,), "edge_length": ()})
         .set(edge_length=jnp.ones(topo.size))
-        .set_at(topo.is_leaf, estimated_value=leaves)
+        .at[topo.is_leaf].set(estimated_value=leaves)
     )
 
     out = phylo_mean()(tree)
@@ -94,7 +94,7 @@ def _numpy_phylo_mean(parents, edge_lengths, leaf_mask, leaf_values, depth, leve
 def test_phylo_mean_matches_numpy_reference_random():
     """Random edges and leaf values on a depth-3 binary tree must agree
     with a plain-numpy reference to floating-point tolerance."""
-    topo = symmetric_topology(height=3, degree=2)
+    topo = symmetric_topology(depth=3, degree=2)
     key = jax.random.PRNGKey(7)
     k_e, k_v = jax.random.split(key)
     edge_lengths = jax.random.uniform(k_e, (topo.size,), minval=0.1, maxval=2.0)
@@ -103,7 +103,7 @@ def test_phylo_mean_matches_numpy_reference_random():
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=edge_lengths)
-        .set_at(topo.is_leaf, estimated_value=leaf_vals)
+        .at[topo.is_leaf].set(estimated_value=leaf_vals)
     )
     hx_result = np.asarray(phylo_mean()(tree)["estimated_value"])
 
@@ -120,11 +120,11 @@ def test_phylo_mean_matches_numpy_reference_random():
 
 # ── pipeline composition ───────────────────────────────────────────
 def test_phylo_mean_composes_under_outer_jit():
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=jnp.ones(topo.size))
-        .set_at(topo.is_leaf, estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0]))
+        .at[topo.is_leaf].set(estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0]))
     )
     sweep = phylo_mean()
 
@@ -142,7 +142,7 @@ def test_phylo_mean_runs_on_newick_tree():
     tree = newick.read(src, schema={"estimated_value": ()})
     # Leaf indices in BFS order: identify leaves and seed.
     leaf_vals = jnp.array([1.0, 2.0, 3.0, 4.0])
-    tree = tree.set_at(tree.topology.is_leaf, estimated_value=leaf_vals)
+    tree = tree.at[tree.topology.is_leaf].set(estimated_value=leaf_vals)
 
     out = phylo_mean()(tree)
     # Sanity: root estimate is some finite weighted mean of leaves.
@@ -159,7 +159,7 @@ def test_phylo_mean_on_unequal_degree_tree_raises_or_runs_gracefully():
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
         .set(edge_length=jnp.ones(topo.size))
-        .set_at(topo.is_leaf, estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0, 5.0]))
+        .at[topo.is_leaf].set(estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0, 5.0]))
     )
     sweep = phylo_mean()
     # Expect either: the unequal dispatcher rejects the proxy's reshape,

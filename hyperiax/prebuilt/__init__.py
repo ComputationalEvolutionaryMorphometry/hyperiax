@@ -7,21 +7,18 @@ Importing :mod:`hyperiax.prebuilt` itself does not pull in any optional
 dependencies; individual prebuilts may, but they import lazily.
 """
 
-from . import bffg_gaussian, bffg_sde, lddmm, mcmc, sde, shape_kernels
-from .bffg_gaussian import (
+from . import bffg, mcmc, sde
+from .bffg import (
     gaussian_down_conditional,
     gaussian_down_unconditional,
     gaussian_up,
     init_gaussian_leaves,
-)
-from .bffg_sde import (
     init_sde_leaves,
     propagate_v_T_to_v_0,
     sde_down_conditional,
     sde_down_unconditional,
     sde_up,
 )
-from .lddmm import lddmm_covariance, lddmm_drift
 from .mcmc import (
     MHState,
     crank_nicolson_proposal,
@@ -34,8 +31,7 @@ from .phylo_mean import phylo_mean
 
 __all__ = [
     "MHState",
-    "bffg_gaussian",
-    "bffg_sde",
+    "bffg",
     "crank_nicolson_proposal",
     "gaussian_down_conditional",
     "gaussian_down_unconditional",
@@ -43,9 +39,6 @@ __all__ = [
     "init_gaussian_leaves",
     "init_sde_leaves",
     "init_state",
-    "lddmm",
-    "lddmm_covariance",
-    "lddmm_drift",
     "mcmc",
     "metropolis_step",
     "phylo_mean",
@@ -56,5 +49,4 @@ __all__ = [
     "sde_down_conditional",
     "sde_down_unconditional",
     "sde_up",
-    "shape_kernels",
 ]

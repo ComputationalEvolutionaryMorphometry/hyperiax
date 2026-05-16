@@ -1,9 +1,9 @@
 """SDE BFFG (closed-form): backward_filter, forward_guided, and sweeps.
 
-Cross-checks against :mod:`hyperiax.prebuilt.bffg_gaussian`: for free
-Brownian motion (``b=0``, ``σ=I``, ``a=I``), the SDE BFFG math reduces
-to the Gaussian closed form. Identical inputs must produce identical
-``F_T`` and ``H_T``.
+Cross-checks against the Gaussian variant in :mod:`hyperiax.prebuilt.bffg`:
+for free Brownian motion (``b=0``, ``σ=I``, ``a=I``), the SDE BFFG math
+reduces to the Gaussian closed form. Identical inputs must produce
+identical ``F_T`` and ``H_T``.
 """
 
 import jax
@@ -22,7 +22,7 @@ from hyperiax.prebuilt import (
     sde_down_unconditional,
     sde_up,
 )
-from hyperiax.prebuilt.bffg_sde import backward_filter, forward_guided
+from hyperiax.prebuilt.bffg import backward_filter, forward_guided
 from hyperiax.prebuilt.sde import dts
 
 
@@ -195,7 +195,7 @@ def test_sde_down_unconditional_zero_noise_constant_trajectory():
     sde_tree, topo = _make_sde_tree(edge_lengths, [[1.0], [2.0]], obs_var=0.1)
     # Seed the root's trajectory with a known constant value.
     root_traj = jnp.full((1, N_STEPS + 1, N * D), 7.0)
-    sde_tree = sde_tree.set_at(topo.is_root, value=root_traj)
+    sde_tree = sde_tree.at[topo.is_root].set(value=root_traj)
 
     sweep = sde_down_unconditional(N_STEPS, _zero_drift, _identity_sigma)
     out = sweep(sde_tree)
@@ -428,7 +428,7 @@ def test_backward_filter_ode_without_diffrax_gives_clean_error(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", fake_import)
     monkeypatch.delitem(sys.modules, "diffrax", raising=False)
 
-    from hyperiax.prebuilt.bffg_sde import _backward_filter_ode
+    from hyperiax.prebuilt.bffg import _backward_filter_ode
 
     with pytest.raises(ImportError, match="prebuilt-bffg"):
         _backward_filter_ode(

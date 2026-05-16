@@ -109,7 +109,7 @@ def test_newick_tree_can_run_a_sweep():
     import hyperiax as hx
 
     tree = newick.read("(A:1,B:1,C:1)R;", schema={"value": ()})
-    tree = tree.set_at(tree.topology.is_leaf, value=jnp.array([10.0, 20.0, 30.0]))
+    tree = tree.at[tree.topology.is_leaf].set(value=jnp.array([10.0, 20.0, 30.0]))
 
     @hx.up(reads_children=("value",), writes=("value",))
     def sum_up(node, children, params):

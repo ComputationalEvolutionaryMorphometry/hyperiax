@@ -88,7 +88,7 @@ def test_state_can_be_tuple():
 
 def test_state_can_be_tree():
     """The Tree pytree should ride through MCMC just like any other state."""
-    topo = hx.symmetric_topology(height=2, degree=2)
+    topo = hx.symmetric_topology(depth=2, degree=2)
     tree = hx.Tree.empty(topo, {"x": ()}).set(x=jnp.zeros(topo.size))
 
     def log_target(t: hx.Tree) -> jax.Array:

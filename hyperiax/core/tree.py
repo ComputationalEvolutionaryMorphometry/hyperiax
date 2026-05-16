@@ -23,14 +23,14 @@ from .topology import Topology
 # silently masking the data.
 _RESERVED_FIELD_NAMES = frozenset({
     "topology", "schema", "data", "size",          # dataclass fields + property
-    "set", "set_at", "update", "drop",             # mutators
+    "set", "at", "update", "drop",                 # mutators
     "empty", "from_data",                          # classmethods
 })
 
 
 @dataclass(frozen=True, eq=False)
 class Tree:
-    """A topology + a typed dict of (N, *trailing) arrays.
+    """A topology + a typed dict of ``(N, *trailing)`` arrays.
 
     Construction is always functional: every "mutator" returns a new Tree
     sharing the same Topology and (usually) Schema, with replaced data.
@@ -144,16 +144,16 @@ class Tree:
             new_data[name] = arr
         return Tree(topology=self.topology, schema=self.schema, data=new_data)
 
-    def set_at(self, indices, **fields: jax.Array) -> "Tree":
-        """Set values at the given indices / mask; equivalent to ``arr.at[indices].set(v)``."""
-        new_data = dict(self.data)
-        for name, value in fields.items():
-            if name not in self.schema:
-                raise MissingField(f"Cannot set unknown field {name!r}")
-            spec = self.schema[name]
-            arr = jnp.asarray(value, dtype=spec.dtype)
-            new_data[name] = new_data[name].at[indices].set(arr)
-        return Tree(topology=self.topology, schema=self.schema, data=new_data)
+    @property
+    def at(self) -> "_AtAccessor":
+        """JAX-style scatter accessor: ``tree.at[indices].set(field=values)``.
+
+        Mirrors :attr:`jax.numpy.ndarray.at`. The returned indexer supports
+        ``set``, ``add``, ``multiply``, ``min``, ``max`` (all take fields as
+        keyword arguments and return a new :class:`Tree`) and ``get``
+        (returns a ``dict`` of every field evaluated at ``indices``).
+        """
+        return _AtAccessor(self)
 
     def update(self, **fields) -> "Tree":
         """Add brand-new fields. Values can be a FieldSpec, a shape tuple, or an array.
@@ -208,6 +208,59 @@ class Tree:
         # If you find yourself wanting to hash a Tree, you are probably trying
         # to pass it as a ``static_argnames`` — let it ride as a pytree instead.
         raise TypeError("Tree is not hashable; pass it as a JAX pytree, not as a static arg.")
+
+
+# ── .at[...] accessor (JAX-style scatter for the multi-field Tree) ───
+class _TreeIndexer:
+    """Bound result of ``tree.at[idx]``; carries the indexer and the tree."""
+
+    __slots__ = ("_tree", "_idx")
+
+    def __init__(self, tree: Tree, idx) -> None:
+        self._tree = tree
+        self._idx = idx
+
+    def _apply(self, op: str, fields: Mapping[str, jax.Array]) -> Tree:
+        tree = self._tree
+        new_data = dict(tree.data)
+        for name, value in fields.items():
+            if name not in tree.schema:
+                raise MissingField(f"Cannot {op} unknown field {name!r}")
+            spec = tree.schema[name]
+            arr = jnp.asarray(value, dtype=spec.dtype)
+            new_data[name] = getattr(new_data[name].at[self._idx], op)(arr)
+        return Tree(topology=tree.topology, schema=tree.schema, data=new_data)
+
+    def set(self, **fields: jax.Array) -> Tree:
+        return self._apply("set", fields)
+
+    def add(self, **fields: jax.Array) -> Tree:
+        return self._apply("add", fields)
+
+    def multiply(self, **fields: jax.Array) -> Tree:
+        return self._apply("multiply", fields)
+
+    def min(self, **fields: jax.Array) -> Tree:
+        return self._apply("min", fields)
+
+    def max(self, **fields: jax.Array) -> Tree:
+        return self._apply("max", fields)
+
+    def get(self) -> dict:
+        """Return ``{field: tree.data[field][indices]}`` for every field."""
+        return {n: self._tree.data[n][self._idx] for n in self._tree.schema.names}
+
+
+class _AtAccessor:
+    """Descriptor returned by :attr:`Tree.at`; indexes into a :class:`_TreeIndexer`."""
+
+    __slots__ = ("_tree",)
+
+    def __init__(self, tree: Tree) -> None:
+        self._tree = tree
+
+    def __getitem__(self, idx) -> _TreeIndexer:
+        return _TreeIndexer(self._tree, idx)
 
 
 # ── JAX pytree registration ───────────────────────────────────────────

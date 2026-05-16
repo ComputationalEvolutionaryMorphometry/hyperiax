@@ -11,30 +11,30 @@ import numpy as np
 from .topology import Topology
 
 
-def symmetric_topology(height: int, degree: int) -> Topology:
+def symmetric_topology(depth: int, degree: int) -> Topology:
     """A regular tree where every internal node has exactly ``degree`` children.
 
-    A tree of ``height=0`` contains just the root; ``height=1`` has the root
+    A tree of ``depth=0`` contains just the root; ``depth=1`` has the root
     plus one level of ``degree`` leaves; and so on. Total node count is
     :math:`\\sum_{k=0}^{h} d^k = (d^{h+1} - 1) / (d - 1)` for ``d > 1``, and
     ``h + 1`` for ``d == 1``.
     """
-    if height < 0:
-        raise ValueError(f"height must be non-negative, got {height}")
+    if depth < 0:
+        raise ValueError(f"depth must be non-negative, got {depth}")
     if degree < 1:
         raise ValueError(f"degree must be >= 1, got {degree}")
 
     if degree == 1:
-        size = height + 1
+        size = depth + 1
         # Chain: parents[i] = i - 1, root self-parents.
-        parents = np.arange(-1, height, dtype=np.int32)
+        parents = np.arange(-1, depth, dtype=np.int32)
         parents[0] = 0
     else:
-        size = (degree ** (height + 1) - 1) // (degree - 1)
+        size = (degree ** (depth + 1) - 1) // (degree - 1)
         parents = np.zeros(size, dtype=np.int32)
         prev_level_start = 0
         cursor = 1
-        for level in range(1, height + 1):
+        for level in range(1, depth + 1):
             n_at_level = degree ** level
             local = np.arange(n_at_level, dtype=np.int32)
             parents[cursor : cursor + n_at_level] = prev_level_start + local // degree

@@ -151,7 +151,7 @@ def test_prebuilt_does_not_import_io() -> None:
 
 
 # Optional deps that must stay function-local (lazy) in L2 modules.
-LAZY_REQUIRED = ("ete3", "trimesh", "diffrax", "jax_tqdm")
+LAZY_REQUIRED = ("ete3", "diffrax", "jax_tqdm")
 
 
 def _bare_top_level_imports(tree: ast.Module) -> list[ast.AST]:

@@ -13,12 +13,12 @@ from hyperiax import MissingField, SchemaMismatch, Tree, symmetric_topology, up
 # ── T-4: numerical correctness ──────────────────────────────────────
 def test_up_sweep_root_is_mean_of_all_leaves():
     """Recursive child-averaging on a 2^h binary tree collapses to leaf mean."""
-    topo = symmetric_topology(height=3, degree=2)
+    topo = symmetric_topology(depth=3, degree=2)
     tree = Tree.empty(topo, {"value": (2,)})
 
     n_leaves = int(topo.is_leaf.sum())
     leaf_vals = jnp.arange(2 * n_leaves, dtype=jnp.float32).reshape(n_leaves, 2)
-    tree = tree.set_at(topo.is_leaf, value=leaf_vals)
+    tree = tree.at[topo.is_leaf].set(value=leaf_vals)
 
     @up(reads_children=("value",), writes=("value",))
     def avg(node, children, params):
@@ -30,10 +30,10 @@ def test_up_sweep_root_is_mean_of_all_leaves():
 
 def test_up_sweep_per_level_values_match_hand_computed():
     """Level-2 nodes (3,4,5,6) should each be the mean of their 2 leaf children."""
-    topo = symmetric_topology(height=3, degree=2)  # leaves at [7..14]
+    topo = symmetric_topology(depth=3, degree=2)  # leaves at [7..14]
     tree = Tree.empty(topo, {"value": (1,)})
     leaf_vals = jnp.arange(8, dtype=jnp.float32).reshape(8, 1)
-    tree = tree.set_at(topo.is_leaf, value=leaf_vals)
+    tree = tree.at[topo.is_leaf].set(value=leaf_vals)
 
     @up(reads_children=("value",), writes=("value",))
     def avg(node, children, params):
@@ -53,9 +53,9 @@ def test_up_sweep_per_level_values_match_hand_computed():
 
 def test_up_sweep_passes_node_data_alongside_children():
     """The user's function gets both node and children data per parent."""
-    topo = symmetric_topology(height=2, degree=2)  # 7 nodes
+    topo = symmetric_topology(depth=2, degree=2)  # 7 nodes
     tree = Tree.empty(topo, {"value": (), "bias": ()})
-    tree = tree.set_at(topo.is_leaf, value=jnp.ones(4))
+    tree = tree.at[topo.is_leaf].set(value=jnp.ones(4))
     tree = tree.set(bias=jnp.arange(7, dtype=jnp.float32))  # 0..6
 
     @up(reads=("bias",), reads_children=("value",), writes=("value",))
@@ -74,8 +74,8 @@ def test_up_sweep_passes_node_data_alongside_children():
 
 def test_up_sweep_threads_params():
     """`params` reaches the user fn unchanged."""
-    topo = symmetric_topology(height=1, degree=2)
-    tree = Tree.empty(topo, {"value": ()}).set_at(topo.is_leaf, value=jnp.ones(2))
+    topo = symmetric_topology(depth=1, degree=2)
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_leaf].set(value=jnp.ones(2))
 
     @up(reads_children=("value",), writes=("value",))
     def scaled_sum(node, children, params):
@@ -98,18 +98,18 @@ def test_up_sweep_jit_cache_hits_on_identical_topology():
         return {"value": children.value.mean(0)}
 
     # Fresh topology + tree
-    topo1 = symmetric_topology(height=3, degree=2)
-    tree1 = Tree.empty(topo1, {"value": (2,)}).set_at(topo1.is_leaf, value=jnp.ones((8, 2)))
+    topo1 = symmetric_topology(depth=3, degree=2)
+    tree1 = Tree.empty(topo1, {"value": (2,)}).at[topo1.is_leaf].set(value=jnp.ones((8, 2)))
     avg(tree1)["value"].block_until_ready()
     initial = trace_count
     assert initial > 0  # we did trace on first compile
 
     # Fresh tree with structurally-identical topology (different Python objects)
-    topo2 = symmetric_topology(height=3, degree=2)
+    topo2 = symmetric_topology(depth=3, degree=2)
     assert topo2 is not topo1
     assert topo2 == topo1
 
-    tree2 = Tree.empty(topo2, {"value": (2,)}).set_at(topo2.is_leaf, value=jnp.ones((8, 2)))
+    tree2 = Tree.empty(topo2, {"value": (2,)}).at[topo2.is_leaf].set(value=jnp.ones((8, 2)))
     for _ in range(5):
         avg(tree2)["value"].block_until_ready()
 
@@ -129,9 +129,9 @@ def test_up_sweep_does_recompile_for_different_schema():
         trace_count += 1
         return {"value": children.value.mean(0)}
 
-    topo = symmetric_topology(height=2, degree=2)
-    t_2d = Tree.empty(topo, {"value": (2,)}).set_at(topo.is_leaf, value=jnp.ones((4, 2)))
-    t_3d = Tree.empty(topo, {"value": (3,)}).set_at(topo.is_leaf, value=jnp.ones((4, 3)))
+    topo = symmetric_topology(depth=2, degree=2)
+    t_2d = Tree.empty(topo, {"value": (2,)}).at[topo.is_leaf].set(value=jnp.ones((4, 2)))
+    t_3d = Tree.empty(topo, {"value": (3,)}).at[topo.is_leaf].set(value=jnp.ones((4, 3)))
     avg(t_2d)["value"].block_until_ready()
     count_after_first = trace_count
     avg(t_3d)["value"].block_until_ready()
@@ -141,7 +141,7 @@ def test_up_sweep_does_recompile_for_different_schema():
 
 # ── validation paths ──────────────────────────────────────────────
 def test_up_sweep_raises_on_missing_field():
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
     tree = Tree.empty(topo, {"value": (2,)})
 
     @up(reads_children=("not_in_schema",), writes=("value",))
@@ -154,8 +154,8 @@ def test_up_sweep_raises_on_missing_field():
 
 def test_up_sweep_raises_on_extra_writes():
     """Returning a key not declared in writes is a schema violation."""
-    topo = symmetric_topology(height=2, degree=2)
-    tree = Tree.empty(topo, {"value": (2,)}).set_at(topo.is_leaf, value=jnp.ones((4, 2)))
+    topo = symmetric_topology(depth=2, degree=2)
+    tree = Tree.empty(topo, {"value": (2,)}).at[topo.is_leaf].set(value=jnp.ones((4, 2)))
 
     @up(reads_children=("value",), writes=("value",))
     def extra_key(node, children, params):

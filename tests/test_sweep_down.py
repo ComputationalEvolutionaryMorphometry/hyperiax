@@ -18,7 +18,7 @@ from hyperiax import (
 # ── T-6: propagation correctness ────────────────────────────────────
 def test_down_sweep_propagates_root_value_via_delta():
     """``value <- parent.value + node.delta`` accumulates along path-to-root."""
-    topo = symmetric_topology(height=2, degree=2)  # 7 nodes
+    topo = symmetric_topology(depth=2, degree=2)  # 7 nodes
     tree = (
         Tree.empty(topo, {"value": (), "delta": ()})
         .set(delta=jnp.ones(7))
@@ -35,9 +35,8 @@ def test_down_sweep_propagates_root_value_via_delta():
 
 
 def test_down_sweep_copies_root_to_all_descendants():
-    topo = symmetric_topology(height=3, degree=2)
-    tree = Tree.empty(topo, {"value": (2,)}).set_at(
-        topo.is_root, value=jnp.array([[3.0, 4.0]])
+    topo = symmetric_topology(depth=3, degree=2)
+    tree = Tree.empty(topo, {"value": (2,)}).at[topo.is_root].set(value=jnp.array([[3.0, 4.0]])
     )
 
     @down(reads_parent=("value",), writes=("value",))
@@ -49,8 +48,8 @@ def test_down_sweep_copies_root_to_all_descendants():
 
 
 def test_down_sweep_threads_params():
-    topo = symmetric_topology(height=1, degree=3)
-    tree = Tree.empty(topo, {"value": ()}).set_at(topo.is_root, value=jnp.array([2.0]))
+    topo = symmetric_topology(depth=1, degree=3)
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_root].set(value=jnp.array([2.0]))
 
     @down(reads_parent=("value",), writes=("value",))
     def scale(node, parent, params):
@@ -69,7 +68,7 @@ def test_down_sweep_handles_unequal_degree_topology():
     node 2 has 0."""
     topo = Topology.from_parents([0, 0, 0, 1, 1, 1])
     assert not topo.equal_degree
-    tree = Tree.empty(topo, {"value": ()}).set_at(topo.is_root, value=jnp.array([7.0]))
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_root].set(value=jnp.array([7.0]))
 
     @down(reads_parent=("value",), writes=("value",))
     def copy_down(node, parent, params):
@@ -82,9 +81,8 @@ def test_down_sweep_handles_unequal_degree_topology():
 def test_down_sweep_root_remains_unchanged():
     """Root has no parent; the sweep starts at level 1, so root data is
     never touched by the user function."""
-    topo = symmetric_topology(height=2, degree=2)
-    tree = Tree.empty(topo, {"value": ()}).set_at(
-        topo.is_root, value=jnp.array([99.0])
+    topo = symmetric_topology(depth=2, degree=2)
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_root].set(value=jnp.array([99.0])
     )
 
     @down(reads_parent=("value",), writes=("value",))
@@ -98,7 +96,7 @@ def test_down_sweep_root_remains_unchanged():
 
 # ── JIT cache + outer jit ──────────────────────────────────────────
 def test_down_sweep_outer_jit_does_not_leak_tracer():
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
     tree = Tree.empty(topo, {"value": (), "delta": ()}).set(delta=jnp.ones(7))
 
     @down(reads=("delta",), reads_parent=("value",), writes=("value",))
@@ -123,17 +121,15 @@ def test_down_sweep_jit_cache_hits_on_identical_topology():
         trace_count += 1
         return {"value": parent.value}
 
-    topo1 = symmetric_topology(height=3, degree=2)
-    tree1 = Tree.empty(topo1, {"value": (2,)}).set_at(
-        topo1.is_root, value=jnp.array([[1.0, 2.0]])
+    topo1 = symmetric_topology(depth=3, degree=2)
+    tree1 = Tree.empty(topo1, {"value": (2,)}).at[topo1.is_root].set(value=jnp.array([[1.0, 2.0]])
     )
     copy_down(tree1)["value"].block_until_ready()
     initial = trace_count
     assert initial > 0
 
-    topo2 = symmetric_topology(height=3, degree=2)
-    tree2 = Tree.empty(topo2, {"value": (2,)}).set_at(
-        topo2.is_root, value=jnp.array([[5.0, 6.0]])
+    topo2 = symmetric_topology(depth=3, degree=2)
+    tree2 = Tree.empty(topo2, {"value": (2,)}).at[topo2.is_root].set(value=jnp.array([[5.0, 6.0]])
     )
     for _ in range(5):
         copy_down(tree2)["value"].block_until_ready()
@@ -145,10 +141,10 @@ def test_up_then_down_broadcasts_leaf_mean_to_all_nodes():
     """A canonical pipeline: up-sweep computes the leaf mean at the root,
     down-sweep broadcasts it to every node. After both, every node holds
     the leaf mean."""
-    topo = symmetric_topology(height=3, degree=2)
+    topo = symmetric_topology(depth=3, degree=2)
     tree = Tree.empty(topo, {"value": (2,)})
     leaf_vals = jnp.arange(16, dtype=jnp.float32).reshape(8, 2)
-    tree = tree.set_at(topo.is_leaf, value=leaf_vals)
+    tree = tree.at[topo.is_leaf].set(value=leaf_vals)
 
     @hx.up(reads_children=("value",), writes=("value",))
     def avg(node, children, params):
@@ -169,7 +165,7 @@ def test_up_then_down_broadcasts_leaf_mean_to_all_nodes():
 
 # ── validation paths ───────────────────────────────────────────────
 def test_down_sweep_raises_on_missing_field():
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
     tree = Tree.empty(topo, {"value": ()})
 
     @down(reads_parent=("does_not_exist",), writes=("value",))
@@ -181,7 +177,7 @@ def test_down_sweep_raises_on_missing_field():
 
 
 def test_down_sweep_raises_on_extra_writes():
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
     tree = Tree.empty(topo, {"value": ()})
 
     @down(reads_parent=("value",), writes=("value",))

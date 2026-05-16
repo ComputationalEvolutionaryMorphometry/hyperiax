@@ -14,7 +14,7 @@ Usage::
 
     tree = hx.Tree.empty(topo, {"estimated_value": (d,), "edge_length": ()})
     tree = tree.set(edge_length=...)
-    tree = tree.set_at(topo.is_leaf, estimated_value=observed_leaves)
+    tree = tree.at[topo.is_leaf].set(estimated_value=observed_leaves)
 
     sweep = hyperiax.prebuilt.phylo_mean()
     inferred = sweep(tree)

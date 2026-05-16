@@ -26,7 +26,7 @@ def test_outer_jit_repeated_calls_no_leaked_tracer():
     called repeatedly under ``@jax.jit``. The old in-place
     ``tree.data = {...}`` would leak tracers between calls. The immutable
     pytree Tree fixes it."""
-    topo = symmetric_topology(height=3, degree=2)
+    topo = symmetric_topology(depth=3, degree=2)
 
     @up(reads_children=("value",), writes=("value",))
     def avg(node, children, params):
@@ -36,8 +36,7 @@ def test_outer_jit_repeated_calls_no_leaked_tracer():
     def step(tree):
         return avg(tree)
 
-    tree = Tree.empty(topo, {"value": (2,)}).set_at(
-        topo.is_leaf, value=jnp.arange(16, dtype=jnp.float32).reshape(8, 2)
+    tree = Tree.empty(topo, {"value": (2,)}).at[topo.is_leaf].set(value=jnp.arange(16, dtype=jnp.float32).reshape(8, 2)
     )
 
     # 20 successive calls; old hyperiax would raise LeakedTracer within a few.
@@ -50,7 +49,7 @@ def test_outer_jit_composes_multi_sweep_pipeline():
     """A train-step-style function chaining up + down + up inside one jit.
     Each sweep returns a new Tree pytree; the chain composes without
     intermediate Python-state mutation."""
-    topo = symmetric_topology(height=3, degree=2)
+    topo = symmetric_topology(depth=3, degree=2)
 
     @up(reads_children=("value",), writes=("value",))
     def avg(node, children, params):
@@ -67,8 +66,7 @@ def test_outer_jit_composes_multi_sweep_pipeline():
         t = avg(t)           # converged
         return t
 
-    tree = Tree.empty(topo, {"value": (2,)}).set_at(
-        topo.is_leaf, value=jnp.arange(16, dtype=jnp.float32).reshape(8, 2)
+    tree = Tree.empty(topo, {"value": (2,)}).at[topo.is_leaf].set(value=jnp.arange(16, dtype=jnp.float32).reshape(8, 2)
     )
     leaf_mean = jnp.arange(16, dtype=jnp.float32).reshape(8, 2).mean(0)
 
@@ -82,7 +80,7 @@ def test_outer_jit_composes_multi_sweep_pipeline():
 def test_outer_jit_yields_same_result_as_eager():
     """`@jax.jit` is purely an optimization; numerical results must match
     the eager path bit-for-bit."""
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
     tree = Tree.empty(topo, {"value": (), "delta": ()}).set(delta=jnp.ones(7))
 
     @down(reads=("delta",), reads_parent=("value",), writes=("value",))
@@ -101,9 +99,8 @@ def test_lax_scan_body_traces_user_fn_same_count_as_single_call():
     """``lax.scan(body, ..., length=N)`` traces the body **once** — not N
     times. We verify by comparing trace counts: a single direct call to
     the sweep equals a 100-iteration scan."""
-    topo = symmetric_topology(height=3, degree=2)
-    tree = Tree.empty(topo, {"value": (2,)}).set_at(
-        topo.is_leaf, value=jnp.ones((8, 2))
+    topo = symmetric_topology(depth=3, degree=2)
+    tree = Tree.empty(topo, {"value": (2,)}).at[topo.is_leaf].set(value=jnp.ones((8, 2))
     )
 
     # Direct call: trace count = number of levels touched (= depth)
@@ -142,9 +139,8 @@ def test_lax_scan_top_level_jaxpr_has_one_scan_primitive():
     """Structural check: the jaxpr of ``lax.scan(body, length=N)(tree)`` has
     a single top-level ``scan`` equation. If the body were re-traced or
     unrolled per iteration, we'd see many more equations."""
-    topo = symmetric_topology(height=3, degree=2)
-    tree = Tree.empty(topo, {"value": (2,)}).set_at(
-        topo.is_leaf, value=jnp.ones((8, 2))
+    topo = symmetric_topology(depth=3, degree=2)
+    tree = Tree.empty(topo, {"value": (2,)}).at[topo.is_leaf].set(value=jnp.ones((8, 2))
     )
 
     @up(reads_children=("value",), writes=("value",))
@@ -169,9 +165,8 @@ def test_lax_scan_top_level_jaxpr_has_one_scan_primitive():
 
 def test_lax_scan_yields_numerically_correct_repeated_application():
     """Running an up-sweep K times via scan equals K direct applications."""
-    topo = symmetric_topology(height=3, degree=2)
-    tree = Tree.empty(topo, {"value": ()}).set_at(
-        topo.is_leaf, value=jnp.arange(8, dtype=jnp.float32)
+    topo = symmetric_topology(depth=3, degree=2)
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_leaf].set(value=jnp.arange(8, dtype=jnp.float32)
     )
 
     @up(reads_children=("value",), writes=("value",))
@@ -194,8 +189,7 @@ def test_lax_scan_yields_numerically_correct_repeated_application():
 def test_lax_scan_works_on_unequal_degree_tree():
     """The segment-reduction path also composes with lax.scan."""
     topo = Topology.from_parents([0, 0, 0, 1, 1, 1, 2, 2])
-    tree = Tree.empty(topo, {"value": ()}).set_at(
-        topo.is_leaf, value=jnp.ones(5)
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_leaf].set(value=jnp.ones(5)
     )
 
     @up(reads_children=("value",), writes=("value",))
@@ -213,7 +207,7 @@ def test_lax_scan_works_on_unequal_degree_tree():
 def test_grad_through_up_sweep_matches_hand_derivative():
     """``avg(leaves)`` averaged up to root: ``loss = root**2``.
     ``d_loss/d_leaf[i] = 2 * root / N_leaves`` for a symmetric binary tree."""
-    topo = symmetric_topology(height=2, degree=2)  # 4 leaves
+    topo = symmetric_topology(depth=2, degree=2)  # 4 leaves
     n_leaves = int(topo.is_leaf.sum())
 
     @up(reads_children=("value",), writes=("value",))
@@ -221,7 +215,7 @@ def test_grad_through_up_sweep_matches_hand_derivative():
         return {"value": children.value.mean(0)}
 
     def loss_fn(leaf_vals):
-        tree = Tree.empty(topo, {"value": ()}).set_at(topo.is_leaf, value=leaf_vals)
+        tree = Tree.empty(topo, {"value": ()}).at[topo.is_leaf].set(value=leaf_vals)
         return avg(tree)["value"][0] ** 2
 
     leaf_vals = jnp.ones(n_leaves)
@@ -234,7 +228,7 @@ def test_grad_through_down_sweep_matches_hand_derivative():
     """``propagate``: each node = parent + node.delta. Loss = sum of leaf
     values squared. Differentiating w.r.t. root.value should give
     ``2 * sum_leaf_value = 2 * (n_leaves * (root + sum_path_deltas))``."""
-    topo = symmetric_topology(height=2, degree=2)  # depth 2, 4 leaves
+    topo = symmetric_topology(depth=2, degree=2)  # depth 2, 4 leaves
     # All deltas zero; leaves = root.
     tree = (
         Tree.empty(topo, {"value": (), "delta": ()})
@@ -246,7 +240,7 @@ def test_grad_through_down_sweep_matches_hand_derivative():
         return {"value": parent.value + node.delta}
 
     def loss_fn(root_val):
-        t = tree.set_at(topo.is_root, value=jnp.array([root_val]))
+        t = tree.at[topo.is_root].set(value=jnp.array([root_val]))
         out = propagate(t)
         return (out["value"][topo.is_leaf] ** 2).sum()
 
@@ -264,7 +258,7 @@ def test_value_and_grad_through_unequal_degree_sweep():
         return {"value": children.value.sum(0)}
 
     def loss_fn(leaf_vals):
-        t = Tree.empty(topo, {"value": ()}).set_at(topo.is_leaf, value=leaf_vals)
+        t = Tree.empty(topo, {"value": ()}).at[topo.is_leaf].set(value=leaf_vals)
         return sum_up(t)["value"][0] ** 2  # root squared
 
     leaf_vals = jnp.ones(5)
@@ -280,8 +274,8 @@ def test_tree_update_then_sweep_uses_new_field():
     """Common pattern: build a Tree, add a brand-new field via .update,
     run a sweep that reads it. update returns a new Tree with extended
     schema; the sweep dispatches on the new pytree structure cleanly."""
-    topo = symmetric_topology(height=2, degree=2)
-    tree = Tree.empty(topo, {"value": ()}).set_at(topo.is_leaf, value=jnp.ones(4))
+    topo = symmetric_topology(depth=2, degree=2)
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_leaf].set(value=jnp.ones(4))
     tree = tree.update(weights=jnp.arange(7, dtype=jnp.float32))
 
     @up(reads=("weights",), reads_children=("value",), writes=("value",))
@@ -299,7 +293,7 @@ def test_tree_update_then_sweep_uses_new_field():
 
 def test_tree_update_then_sweep_under_outer_jit():
     """Same as above, wrapped in @jax.jit."""
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
 
     @up(reads=("weights",), reads_children=("value",), writes=("value",))
     def weighted_sum(node, children, params):
@@ -309,7 +303,7 @@ def test_tree_update_then_sweep_under_outer_jit():
     def step(tree):
         return weighted_sum(tree)
 
-    tree = Tree.empty(topo, {"value": ()}).set_at(topo.is_leaf, value=jnp.ones(4))
+    tree = Tree.empty(topo, {"value": ()}).at[topo.is_leaf].set(value=jnp.ones(4))
     tree = tree.update(weights=jnp.arange(7, dtype=jnp.float32))
 
     out = step(tree)
@@ -323,7 +317,7 @@ def test_flax_style_train_step_pattern():
     """The exact pattern that broke the legacy code: an outer jit wrapping
     a sweep PLUS some external state (here, a simple loss + gradient).
     Old hyperiax leaked tracers; new hyperiax handles this naturally."""
-    topo = symmetric_topology(height=2, degree=2)
+    topo = symmetric_topology(depth=2, degree=2)
 
     @up(reads_children=("value",), writes=("value",))
     def avg(node, children, params):
@@ -331,7 +325,7 @@ def test_flax_style_train_step_pattern():
 
     def loss_and_grad(params, leaf_vals):
         def loss(p, lv):
-            t = Tree.empty(topo, {"value": ()}).set_at(topo.is_leaf, value=lv)
+            t = Tree.empty(topo, {"value": ()}).at[topo.is_leaf].set(value=lv)
             t = avg(t)
             return (t["value"][0] - p["target"]) ** 2
         return jax.value_and_grad(loss)(params, leaf_vals)
