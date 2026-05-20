@@ -189,3 +189,6 @@ CLAUDE.md
 
 .claude/
 .ruff_cache/
+
+# Throwaway profiling scratchpad outputs.
+/profiling/traces/

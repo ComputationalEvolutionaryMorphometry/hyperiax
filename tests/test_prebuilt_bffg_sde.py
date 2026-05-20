@@ -15,8 +15,8 @@ from hyperiax import Topology, Tree
 from hyperiax.prebuilt import (
     gaussian_up,
     init_gaussian_leaves,
-    init_sde_leaves,
-    propagate_v_T_to_v_0,
+    init_sde_tree,
+    propagate_linearization,
     sde_down_conditional,
     sde_down_unconditional,
     sde_up,
@@ -42,7 +42,7 @@ def _identity_sigma(x, params):
 
 # ── pure-math: backward_filter against Gaussian closed form ────────
 def test_backward_filter_brownian_matches_gaussian_closed_form():
-    """Brownian motion has tildea = I everywhere → the SDE filter
+    """Brownian motion has a_aux = I everywhere → the SDE filter
     degenerates to the Gaussian closed-form update
     ``H_0 = H_T / (1 + H_T·T)``, ``F_0 = F_T / (1 + H_T·T)``."""
     T = 1.5
@@ -57,8 +57,8 @@ def test_backward_filter_brownian_matches_gaussian_closed_form():
         v_T=v_T,
         F_T=F_T,
         H_T=H_T,
-        tildea0=jnp.eye(1),
-        tildeaT=jnp.eye(1),
+        a_aux_0=jnp.eye(1),
+        a_aux_T=jnp.eye(1),
     )
     expected_H = 3.0 / (1.0 + 3.0 * T)
     expected_F = 2.0 / (1.0 + 3.0 * T)
@@ -68,9 +68,9 @@ def test_backward_filter_brownian_matches_gaussian_closed_form():
 
 # ── pure-math: forward_guided logpsi at the auxiliary endpoint ─────
 def test_forward_guided_brownian_logpsi_is_zero():
-    """When the auxiliary ``tildea`` matches the actual diffusion ``a``,
-    the bridge-correction terms vanish: ``(a - tildea) = 0`` and the
-    only remaining contribution is ``b · tilderx · dt = 0`` for ``b=0``."""
+    """When the auxiliary ``a_aux`` matches the actual diffusion ``a``,
+    the bridge-correction terms vanish: ``(a - a_aux) = 0`` and the
+    only remaining contribution is ``b · r_aux · dt = 0`` for ``b=0``."""
     T = 1.0
     n_steps = 20
     _dts = dts(T=T, n_steps=n_steps)
@@ -78,6 +78,8 @@ def test_forward_guided_brownian_logpsi_is_zero():
     x0 = jnp.array([0.5])
     H_T = jnp.array([[2.0]])
     F_T = jnp.array([1.0])
+    a_aux = jnp.eye(1)
+    filt = backward_filter(_dts, {}, jnp.zeros(1), jnp.zeros(1), F_T, H_T, a_aux, a_aux)
     Xs, logpsi = forward_guided(
         x0,
         _dts,
@@ -86,10 +88,10 @@ def test_forward_guided_brownian_logpsi_is_zero():
         _identity_sigma,
         params={},
         a=_identity,
-        F_T=F_T,
-        H_T=H_T,
-        tildea0=jnp.eye(1),
-        tildeaT=jnp.eye(1),
+        F_t=filt["F_t"],
+        H_t=filt["H_t"],
+        a_aux_0=a_aux,
+        a_aux_T=a_aux,
     )
     assert abs(float(logpsi)) < 1e-5
     assert Xs.shape == (n_steps + 1, 1)
@@ -106,6 +108,8 @@ def test_forward_guided_zero_noise_drives_state_toward_target():
     x0 = jnp.array([0.0])
     H_T = jnp.array([[1.0]])
     F_T = jnp.array([3.0])
+    a_aux = jnp.eye(1)
+    filt = backward_filter(_dts, {}, jnp.zeros(1), jnp.zeros(1), F_T, H_T, a_aux, a_aux)
     Xs, _ = forward_guided(
         x0,
         _dts,
@@ -114,10 +118,10 @@ def test_forward_guided_zero_noise_drives_state_toward_target():
         _identity_sigma,
         params={},
         a=_identity,
-        F_T=F_T,
-        H_T=H_T,
-        tildea0=jnp.eye(1),
-        tildeaT=jnp.eye(1),
+        F_t=filt["F_t"],
+        H_t=filt["H_t"],
+        a_aux_0=a_aux,
+        a_aux_T=a_aux,
     )
     # The bridge target at time T is v_T = H⁻¹·F = 3.0; the guided
     # ODE relaxes toward it. Allow a generous slack.
@@ -135,12 +139,14 @@ def _make_sde_tree(edge_lengths, leaf_values, obs_var, root_value=0.0):
         "c_T": (D,),
         "F_T": (N * D,),
         "H_T": (N, N),
+        "F_t": (N_STEPS, N * D),
+        "H_t": (N_STEPS, N, N),
         "v_T": (N * D,),
         "v_0": (N * D,),
         "logpsi": (),
     }
     tree = Tree.empty(topo, schema).set(edge_length=jnp.asarray(edge_lengths))
-    tree = init_sde_leaves(
+    tree = init_sde_tree(
         tree,
         jnp.asarray(leaf_values),
         obs_var=obs_var,
@@ -193,12 +199,12 @@ def test_sde_up_root_posterior_matches_hand_formula():
     assert jnp.allclose(out["v_T"][0, 0], F / H, atol=1e-5)
 
 
-# ── propagate_v_T_to_v_0 sets the right linearization point ────────
-def test_propagate_v_T_to_v_0_copies_parent_v_T():
+# ── propagate_linearization sets the right linearization point ────────
+def test_propagate_linearization_copies_parent_v_T():
     edge_lengths = [0.0, 1.0, 2.0]
     sde_tree, topo = _make_sde_tree(edge_lengths, [[1.0], [2.0]], obs_var=0.1)
     after_up = sde_up(n_steps=N_STEPS, a=_identity)(sde_tree)
-    after_prop = propagate_v_T_to_v_0()(after_up)
+    after_prop = propagate_linearization(after_up)
 
     # Children of root (nodes 1, 2) should have v_0 == root's v_T
     root_v_T = after_up["v_T"][0]
@@ -268,7 +274,7 @@ def test_sde_up_then_down_conditional_pipeline_runs():
     sde_tree = sde_tree.set(noise=jnp.zeros((topo.size, N_STEPS, N * D)))
 
     after_up = sde_up(n_steps=N_STEPS, a=_identity)(sde_tree)
-    after_prop = propagate_v_T_to_v_0()(after_up)
+    after_prop = propagate_linearization(after_up)
 
     cond = sde_down_conditional(N_STEPS, _zero_drift, _identity_sigma, _identity)
     out = cond(after_prop)
@@ -322,7 +328,7 @@ def test_backward_filter_ode_with_zero_drift_matches_closed_form():
     F_T = jnp.array([3.0])
     v_T = jnp.array([1.5])
     c_T = jnp.array([0.5])
-    tildea = jnp.eye(1)
+    a_aux = jnp.eye(1)
 
     cf = backward_filter(
         _dts,
@@ -331,8 +337,8 @@ def test_backward_filter_ode_with_zero_drift_matches_closed_form():
         v_T,
         F_T,
         H_T,
-        tildea0=tildea,
-        tildeaT=tildea,
+        a_aux_0=a_aux,
+        a_aux_T=a_aux,
     )
     ode = backward_filter(
         _dts,
@@ -341,8 +347,8 @@ def test_backward_filter_ode_with_zero_drift_matches_closed_form():
         v_T,
         F_T,
         H_T,
-        tildea0=tildea,
-        tildeaT=tildea,
+        a_aux_0=a_aux,
+        a_aux_T=a_aux,
         B=_B_zero,
         beta=_beta_zero,
     )
@@ -351,9 +357,13 @@ def test_backward_filter_ode_with_zero_drift_matches_closed_form():
     assert jnp.allclose(cf["H_0"], ode["H_0"], atol=1e-6)
     assert jnp.allclose(cf["F_0"], ode["F_0"], atol=1e-6)
     assert jnp.allclose(cf["c_0"], ode["c_0"], atol=1e-5)
-    # ODE path additionally returns per-step series.
+    # Both paths return the per-step series at matching shapes and values.
+    assert cf["F_t"].shape == (n_steps, 1)
+    assert cf["H_t"].shape == (n_steps, 1, 1)
     assert ode["F_t"].shape == (n_steps, 1)
     assert ode["H_t"].shape == (n_steps, 1, 1)
+    assert jnp.allclose(cf["F_t"], ode["F_t"], atol=1e-6)
+    assert jnp.allclose(cf["H_t"], ode["H_t"], atol=1e-6)
 
 
 def test_backward_filter_ode_returns_correct_endpoints():
@@ -375,8 +385,8 @@ def test_backward_filter_ode_returns_correct_endpoints():
         v_T,
         F_T,
         H_T,
-        tildea0=jnp.eye(1),
-        tildeaT=jnp.eye(1),
+        a_aux_0=jnp.eye(1),
+        a_aux_T=jnp.eye(1),
         B=_B_zero,
         beta=_beta_zero,
     )
@@ -386,8 +396,9 @@ def test_backward_filter_ode_returns_correct_endpoints():
 
 
 def test_forward_guided_ode_with_zero_drift_matches_closed_form():
-    """Same inputs, same noise → trajectory and logpsi must match within
-    the ODE integrator's tolerance."""
+    """For B = β = 0 the ODE and closed-form paths of ``backward_filter``
+    produce numerically identical ``F_t``/``H_t``, so the matching
+    ``forward_guided`` bridges agree to integrator tolerance."""
     T = 1.0
     n_steps = 16
     _dts = dts(T=T, n_steps=n_steps)
@@ -395,7 +406,21 @@ def test_forward_guided_ode_with_zero_drift_matches_closed_form():
     F_T = jnp.array([2.0])
     x0 = jnp.array([0.3])
     dWs = jax.random.normal(jax.random.PRNGKey(0), (n_steps, 1))
-    tildea = jnp.eye(1)
+    a_aux = jnp.eye(1)
+
+    filt_cf = backward_filter(_dts, {}, jnp.zeros(1), jnp.zeros(1), F_T, H_T, a_aux, a_aux)
+    filt_ode = backward_filter(
+        _dts,
+        {},
+        jnp.zeros(1),
+        jnp.zeros(1),
+        F_T,
+        H_T,
+        a_aux,
+        a_aux,
+        B=_B_zero,
+        beta=_beta_zero,
+    )
 
     Xs_cf, lp_cf = forward_guided(
         x0,
@@ -405,23 +430,10 @@ def test_forward_guided_ode_with_zero_drift_matches_closed_form():
         _identity_sigma,
         params={},
         a=_identity,
-        F_T=F_T,
-        H_T=H_T,
-        tildea0=tildea,
-        tildeaT=tildea,
-    )
-
-    filt = backward_filter(
-        _dts,
-        {},
-        jnp.zeros(1),
-        jnp.zeros(1),
-        F_T,
-        H_T,
-        tildea0=tildea,
-        tildeaT=tildea,
-        B=_B_zero,
-        beta=_beta_zero,
+        F_t=filt_cf["F_t"],
+        H_t=filt_cf["H_t"],
+        a_aux_0=a_aux,
+        a_aux_T=a_aux,
     )
     Xs_ode, lp_ode = forward_guided(
         x0,
@@ -431,10 +443,10 @@ def test_forward_guided_ode_with_zero_drift_matches_closed_form():
         _identity_sigma,
         params={},
         a=_identity,
-        F_t=filt["F_t"],
-        H_t=filt["H_t"],
-        tildea0=tildea,
-        tildeaT=tildea,
+        F_t=filt_ode["F_t"],
+        H_t=filt_ode["H_t"],
+        a_aux_0=a_aux,
+        a_aux_T=a_aux,
         B=_B_zero,
         beta=_beta_zero,
     )
@@ -484,7 +496,7 @@ def test_sde_full_pipeline_with_nontrivial_damping_runs():
         beta=_beta_zero,
     )
     t = up_sweep(sde_tree)
-    t = propagate_v_T_to_v_0()(t)
+    t = propagate_linearization(t)
     out = cond(t)
     assert jnp.all(jnp.isfinite(out["value"]))
     assert jnp.all(jnp.isfinite(out["logpsi"]))
@@ -494,7 +506,7 @@ def test_sde_full_pipeline_with_nontrivial_damping_runs():
 
 
 def test_backward_filter_ode_without_diffrax_gives_clean_error(monkeypatch):
-    """If the ``[prebuilt-bffg]`` extra isn't installed, the ODE path must
+    """If the ``[prebuilt]`` extra isn't installed, the ODE path must
     raise an ImportError that points the user at the right extra."""
     import builtins
     import sys
@@ -511,7 +523,7 @@ def test_backward_filter_ode_without_diffrax_gives_clean_error(monkeypatch):
 
     from hyperiax.prebuilt.bffg import _backward_filter_ode
 
-    with pytest.raises(ImportError, match="prebuilt-bffg"):
+    with pytest.raises(ImportError, match="prebuilt"):
         _backward_filter_ode(
             dts(T=1.0, n_steps=4),
             {},

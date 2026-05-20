@@ -39,6 +39,12 @@ def up_dispatch(sweep: SweepFn, tree: Tree, params, key) -> Tree:
       proxy that dispatches reductions to ``jax.ops.segment_*``.
     """
     _validate_schema(sweep, tree)
+    if sweep.writes_children and not tree.topology.equal_degree:
+        raise NotImplementedError(
+            "writes_children currently requires an equal-degree topology; the "
+            "unequal-degree segment-reduction path has no analogous per-child "
+            "write layout."
+        )
     if tree.topology.equal_degree:
         return _up_dispatch_equal(sweep, tree, params, key)
     return _up_dispatch_unequal(sweep, tree, params, key)
@@ -52,7 +58,7 @@ def down_dispatch(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     the parent record via ``topo.parents``.
     """
     _validate_schema(sweep, tree)
-    return _down_dispatch_jit(sweep, tree, params, key)
+    return _down_dispatch(sweep, tree, params, key)
 
 
 # ── shared helpers ─────────────────────────────────────────────────
@@ -87,6 +93,10 @@ def _up_dispatch_equal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     ``gather_child_idx``; :func:`jax.vmap` lifts the user fn to a
     per-parent view (``node.value : (*trailing,)``, ``children.value :
     (k, *trailing)``).
+
+    Per-parent return values are scattered to the parent slot
+    (``self_idx``); per-child return values declared in ``writes_children``
+    are scattered to each parent's children slots (``child_idx.reshape(-1)``).
     """
     topo = tree.topology
     data = dict(tree.data)
@@ -95,7 +105,10 @@ def _up_dispatch_equal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
         sweep.reads_children,
         tree.schema.names,
     )
-    expected_writes = frozenset(sweep.writes)
+    parent_writes = sweep.writes
+    child_writes = sweep.writes_children
+    expected_writes = frozenset(parent_writes) | frozenset(child_writes)
+    all_writes_decl = parent_writes + child_writes
 
     per_level = jax.vmap(
         lambda nd, cd, p: sweep.fn(Node(nd), Children(cd), p),
@@ -114,10 +127,17 @@ def _up_dispatch_equal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
         children_data = {k: data[k][child_idx] for k in reads_children}
 
         out = per_level(node_data, children_data, params)
-        _check_writes(out, expected_writes, sweep.writes, direction="Up-sweep")
+        _check_writes(out, expected_writes, all_writes_decl, direction="Up-sweep")
 
-        for k, v in out.items():
-            data[k] = data[k].at[self_idx].set(v)
+        for k in parent_writes:
+            data[k] = data[k].at[self_idx].set(out[k])
+
+        if child_writes:
+            flat_child = child_idx.reshape(-1)
+            for k in child_writes:
+                v = out[k]  # (n_parents, k, *trailing) after vmap
+                flat_v = v.reshape((-1,) + v.shape[2:])
+                data[k] = data[k].at[flat_child].set(flat_v)
 
     return Tree(topology=topo, schema=tree.schema, data=data)
 
@@ -177,7 +197,7 @@ def _up_dispatch_unequal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
 
 # ── down dispatch ──────────────────────────────────────────────────
 @partial(jax.jit, static_argnums=(0,))
-def _down_dispatch_jit(sweep: SweepFn, tree: Tree, params, key) -> Tree:
+def _down_dispatch(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     topo = tree.topology
     data = dict(tree.data)
     reads_self, reads_parent = _resolve_reads(
@@ -226,6 +246,7 @@ def _validate_schema(sweep: SweepFn, tree: Tree) -> None:
     if sweep.reads_parent is not None:
         needed.update(sweep.reads_parent)
     needed.update(sweep.writes)
+    needed.update(sweep.writes_children)
 
     missing = needed - set(tree.schema.names)
     if missing:

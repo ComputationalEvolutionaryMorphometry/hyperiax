@@ -33,7 +33,7 @@ def solve(A: jax.Array, v: jax.Array) -> jax.Array:
 
 def dts(T: float = 1.0, n_steps: int = 100) -> jax.Array:
     """Uniform time discretization over ``[0, T]`` with ``n_steps`` intervals."""
-    return jnp.array([T / n_steps] * n_steps)
+    return jnp.full((n_steps,), T / n_steps)
 
 
 def forward(x, dts, dWs, b, sigma, params, a=None) -> jax.Array:
@@ -68,7 +68,7 @@ def forward(x, dts, dWs, b, sigma, params, a=None) -> jax.Array:
                 + b(t, X, params) * dt
                 + dot(cholesky(a(X, params), lower=True, check_finite=False), dW)
             )
-        return ((t + dt, Xtp1), (t, X))
+        return (t + dt, Xtp1), X
 
-    (_, X), (_, Xs) = jax.lax.scan(SDE, (0.0, x), (dts, dWs))
+    (_, X), Xs = jax.lax.scan(SDE, (0.0, x), (dts, dWs))
     return jnp.vstack((Xs, X))

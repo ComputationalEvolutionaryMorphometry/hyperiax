@@ -1,0 +1,9 @@
+# Optional extra: notebook tutorials in docs/source/notebooks/.
+# Mirrors [project.optional-dependencies].notebook in pyproject.toml.
+# Install with:  pip install -r requirements/notebook.txt
+-r base.txt
+matplotlib>=3.8
+jupyter>=1.0
+ipykernel>=6.29
+joblib>=1.4
+optax>=0.2

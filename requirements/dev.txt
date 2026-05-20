@@ -1,0 +1,16 @@
+# Developer dependencies: test, lint, docs.
+# Mirrors [dependency-groups].dev in pyproject.toml.
+# Install with:  pip install -r requirements/dev.txt
+-r base.txt
+-r io.txt
+-r prebuilt.txt
+-r notebook.txt
+pytest>=8
+pytest-xdist>=3
+ruff>=0.6
+pre-commit>=3.7
+sphinx>=7.3
+furo>=2024.5
+myst-nb>=1.1
+sphinx-autodoc-typehints>=2.1
+sphinx-copybutton>=0.5

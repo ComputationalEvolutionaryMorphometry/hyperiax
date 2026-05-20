@@ -29,6 +29,12 @@ class SweepFn:
 
     Hashable so the dispatcher can pin it as JIT static. Equality is
     value-based on ``(direction, fn identity, read/write spec tuples)``.
+
+    ``writes_children`` (up sweeps only) declares fields whose per-parent
+    output has shape ``(k, *trailing)`` and gets scattered to the
+    children's slots rather than the parent's slot — useful for caching
+    per-edge quantities computed during the up-sweep (e.g. the per-step
+    ``F_t``/``H_t`` from a per-edge ODE filter).
     """
 
     direction: Literal["up", "down"]
@@ -37,14 +43,28 @@ class SweepFn:
     reads_children: tuple[str, ...] | None
     reads_parent: tuple[str, ...] | None
     writes: tuple[str, ...]
+    writes_children: tuple[str, ...] = ()
 
     def __post_init__(self):
-        if not self.writes:
-            raise ValueError("@up / @down requires writes=(...) with at least one field")
+        if not self.writes and not self.writes_children:
+            raise ValueError(
+                "@up / @down requires writes=(...) (or writes_children=(...) on @up) "
+                "with at least one field"
+            )
         if self.direction == "up" and self.reads_parent is not None:
             raise ValueError("up sweeps cannot reference parent fields; use @down for that.")
         if self.direction == "down" and self.reads_children is not None:
             raise ValueError("down sweeps cannot reference children fields; use @up for that.")
+        if self.direction == "down" and self.writes_children:
+            raise ValueError(
+                "writes_children is only valid on up sweeps; down sweeps write per-node only."
+            )
+        overlap = set(self.writes) & set(self.writes_children)
+        if overlap:
+            raise ValueError(
+                f"writes and writes_children share fields {sorted(overlap)}; "
+                "each field must be one or the other."
+            )
 
     # ── identity ──────────────────────────────────────────────────────
     def __hash__(self) -> int:
@@ -58,6 +78,7 @@ class SweepFn:
                 self.reads_children,
                 self.reads_parent,
                 self.writes,
+                self.writes_children,
             )
         )
 
@@ -70,13 +91,15 @@ class SweepFn:
             and self.reads_children == other.reads_children
             and self.reads_parent == other.reads_parent
             and self.writes == other.writes
+            and self.writes_children == other.writes_children
         )
 
     def __repr__(self) -> str:
+        extra = f", writes_children={self.writes_children}" if self.writes_children else ""
         return (
             f"SweepFn({self.direction}, "
             f"fn={getattr(self.fn, '__name__', repr(self.fn))}, "
-            f"writes={self.writes})"
+            f"writes={self.writes}{extra})"
         )
 
     # ── invocation ────────────────────────────────────────────────────
@@ -104,22 +127,30 @@ def up(
     *,
     reads: Sequence[str] | None = None,
     reads_children: Sequence[str] | None = None,
-    writes: Sequence[str],
+    writes: Sequence[str] = (),
+    writes_children: Sequence[str] = (),
 ) -> Callable[[Callable], SweepFn]:
     """Decorator: mark a function as an up-sweep.
 
     The decorated function has signature ``(node, children, params)`` and
-    must return a ``dict[str, Array]`` whose key set equals ``writes``
-    exactly. Each returned value must have shape ``(scope_size, *trailing)``
-    matching the schema for that field.
+    must return a ``dict[str, Array]`` whose key set equals
+    ``writes ∪ writes_children`` exactly. Values for keys in ``writes``
+    have shape ``(*trailing,)`` per parent (under :func:`jax.vmap`);
+    values for keys in ``writes_children`` have shape ``(k, *trailing)``
+    per parent and are scattered to the children's slots.
+
+    At least one of ``writes`` or ``writes_children`` must be non-empty.
 
     Args:
         reads: Fields the function reads from the current node. ``None``
             (the default) means "all schema fields at call time."
         reads_children: Fields the function reads from each child.
             ``None`` defaults to all schema fields at call time.
-        writes: Required. The fields the function writes back into the
-            tree. Must be non-empty.
+        writes: Fields written back per parent (canonical case).
+        writes_children: Fields written per child (one row per outgoing
+            edge); requires an equal-degree topology. Use when an up
+            sweep also produces per-edge byproducts you want to cache on
+            each child (e.g. per-edge ODE-filter trajectories).
 
     Example::
 
@@ -138,6 +169,7 @@ def up(
             reads_children=_normalize(reads_children),
             reads_parent=None,
             writes=tuple(writes),
+            writes_children=tuple(writes_children),
         )
 
     return _wrap

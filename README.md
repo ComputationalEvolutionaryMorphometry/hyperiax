@@ -15,7 +15,13 @@ Initially, _Hyperiax_ was designed for phylogenetic analysis of biological shape
 
 ## Installation (development, v3 branch)
 
-Hyperiax v3 uses [`uv`](https://docs.astral.sh/uv/) to manage the Python environment.
+Python 3.11 or newer is required. Two install paths are supported; pick one:
+
+### Option A — `uv` (recommended, fastest)
+
+Hyperiax v3 primarily uses [`uv`](https://docs.astral.sh/uv/) to manage the
+Python environment. `pyproject.toml` is the single source of truth; the
+`uv.lock` checked into the repo pins a reproducible resolution.
 
 ```bash
 # Install uv (macOS)
@@ -42,7 +48,42 @@ uv run pytest
 uv run pre-commit install
 ```
 
-Python 3.11 or newer is required.
+### Option B — conda + pip (traditional)
+
+For environments where `uv` isn't an option, equivalent `conda` / `pip` files
+are mirrored from `pyproject.toml` under `requirements/`:
+
+```
+requirements/
+├── base.txt        # core: jax, jaxlib, numpy
+├── io.txt          # adds ete3
+├── prebuilt.txt    # adds diffrax + jax-tqdm (+ pinned equinox chain)
+├── notebook.txt    # adds matplotlib / jupyter / optax for tutorials
+└── dev.txt         # everything above + pytest / ruff / sphinx
+```
+
+One-shot full dev environment:
+
+```bash
+conda env create -f environment.yml
+conda activate hyperiax
+```
+
+Or piece it together manually:
+
+```bash
+conda create -n hyperiax python=3.12
+conda activate hyperiax
+
+pip install -e .                                 # core only
+pip install -e . -r requirements/prebuilt.txt    # core + an extra
+pip install -e . -r requirements/dev.txt         # full dev setup
+```
+
+> The conda environment intentionally lets conda manage **only Python** —
+> all other packages come from PyPI via pip, to stay in sync with the
+> uv-resolved versions and avoid ABI mismatches between conda-forge JAX
+> and PyPI-built `diffrax` / `equinox`.
 
 ## Project layout (v3)
 

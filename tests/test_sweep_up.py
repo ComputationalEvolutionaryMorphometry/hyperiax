@@ -183,3 +183,77 @@ def test_sweepfn_rejects_parent_reads_on_up_direction():
             reads_parent=("value",),
             writes=("value",),
         )
+
+
+# ── writes_children: per-child scatter from an up sweep ────────────
+def test_up_sweep_writes_children_scatters_per_child():
+    """writes_children declares per-edge outputs that land in each child's slot."""
+    topo = symmetric_topology(depth=2, degree=2)  # nodes 0..6, leaves 3..6
+    tree = Tree.empty(topo, {"value": (), "edge_id": ()}).at[topo.is_leaf].set(value=jnp.ones(4))
+
+    @up(
+        reads_children=("value",),
+        writes=("value",),
+        writes_children=("edge_id",),
+    )
+    def avg_and_label(node, children, params):
+        # children.value: (k,) under vmap; mark each child's edge slot 0..k-1
+        return {
+            "value": children.value.mean(0),
+            "edge_id": jnp.arange(children.value.shape[0], dtype=jnp.float32),
+        }
+
+    out = avg_and_label(tree)
+    # node 0's children are 1, 2 → edge_id[1] = 0, edge_id[2] = 1
+    # node 1's children are 3, 4 → edge_id[3] = 0, edge_id[4] = 1
+    # node 2's children are 5, 6 → edge_id[5] = 0, edge_id[6] = 1
+    assert jnp.allclose(out["edge_id"][1], 0.0)
+    assert jnp.allclose(out["edge_id"][2], 1.0)
+    assert jnp.allclose(out["edge_id"][3], 0.0)
+    assert jnp.allclose(out["edge_id"][4], 1.0)
+    assert jnp.allclose(out["edge_id"][5], 0.0)
+    assert jnp.allclose(out["edge_id"][6], 1.0)
+    # Root is never written by an up sweep (it's no one's child here either).
+    assert jnp.allclose(out["edge_id"][0], 0.0)
+
+
+def test_writes_children_rejected_on_down_direction():
+    with pytest.raises(ValueError, match="writes_children"):
+        hx.SweepFn(
+            direction="down",
+            fn=lambda *a: {"value": None},
+            reads=None,
+            reads_children=None,
+            reads_parent=None,
+            writes=("value",),
+            writes_children=("edge_id",),
+        )
+
+
+def test_writes_children_overlap_with_writes_rejected():
+    with pytest.raises(ValueError, match="share fields"):
+        hx.SweepFn(
+            direction="up",
+            fn=lambda *a: {"value": None},
+            reads=None,
+            reads_children=None,
+            reads_parent=None,
+            writes=("value",),
+            writes_children=("value",),
+        )
+
+
+def test_up_sweep_writes_children_unequal_degree_raises():
+    """writes_children is currently equal-degree only."""
+    from hyperiax import Topology
+
+    topo = Topology.from_parents([0, 0, 0, 0, 1])  # node 1 has one child, root has three
+    assert not topo.equal_degree
+    tree = Tree.empty(topo, {"value": (), "edge_id": ()})
+
+    @up(reads_children=("value",), writes=("value",), writes_children=("edge_id",))
+    def s(node, children, params):
+        return {"value": children.value.sum(0), "edge_id": children.value}
+
+    with pytest.raises(NotImplementedError, match="equal-degree"):
+        s(tree)

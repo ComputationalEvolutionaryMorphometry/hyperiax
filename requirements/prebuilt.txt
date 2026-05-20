@@ -1,0 +1,12 @@
+# Optional extra: prebuilt models (BFFG SDE-ODE, MCMC progress bars).
+# Mirrors [project.optional-dependencies].prebuilt in pyproject.toml.
+# The equinox / jaxtyping / wadler-lindig / optimistix family must move
+# together — pinned at the last known-good set compatible with diffrax 0.7.x.
+# Install with:  pip install -r requirements/prebuilt.txt
+-r base.txt
+diffrax>=0.6
+equinox<0.13.8
+jaxtyping<0.3
+wadler-lindig<0.1.7
+optimistix<0.1
+jax-tqdm>=0.4
