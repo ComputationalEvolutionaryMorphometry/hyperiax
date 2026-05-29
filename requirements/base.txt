@@ -1,6 +1,0 @@
-# Core runtime dependencies for hyperiax.
-# Mirrors [project.dependencies] in pyproject.toml.
-# Install with:  pip install -r requirements/base.txt
-jax>=0.4.30
-jaxlib>=0.4.30
-numpy>=1.26

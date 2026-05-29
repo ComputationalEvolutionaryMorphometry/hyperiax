@@ -20,13 +20,8 @@ Usage::
     inferred = sweep(tree)
     root_estimate = inferred["estimated_value"][0]
 
-Limitation
-----------
-Stage 7 implements the equal-degree path only — the user expression
-``children.estimated_value / children.edge_length`` relies on JAX
-broadcasting, which the unequal-degree ``ChildrenAxis`` proxy doesn't
-yet expose. A ragged-tree variant arrives once the proxy gains
-elementwise arithmetic (or a ``children.gather()`` fallback).
+The body expresses its per-child work via :meth:`Children.map`, so it
+runs unchanged on both equal- and unequal-degree topologies.
 """
 
 from __future__ import annotations
@@ -44,26 +39,20 @@ def phylo_mean() -> SweepFn:
     untouched.
     """
 
+    def _per_child(c):
+        edge = c.edge_length      # () typically (scalar per child)
+        val = c.estimated_value   # (*value_trailing)
+        # Broadcast edge to match the value's trailing rank so the fields
+        # produced here share trailing shape and combine cleanly after fusion.
+        edge_b = edge.reshape(edge.shape + (1,) * (val.ndim - edge.ndim))
+        return {"weighted": val / edge_b, "inv_edge": 1.0 / edge_b}
+
     @up(
         reads_children=("estimated_value", "edge_length"),
         writes=("estimated_value",),
     )
     def _sweep(node, children, params):
-        # Per-parent under jax.vmap:
-        #   children.edge_length     : (k, *edge_trailing) — typically (k,)
-        #   children.estimated_value : (k, *value_trailing)
-        edges = children.edge_length
-        values = children.estimated_value
-        # Broadcast `edges` over the trailing dims of `values` for the
-        # elementwise division. The common case is scalar edges, vector
-        # values: (k,) → (k, 1, ...) to match (k, d, ...).
-        extra = values.ndim - edges.ndim
-        if extra > 0:
-            edges_b = edges.reshape(edges.shape + (1,) * extra)
-        else:
-            edges_b = edges
-        weighted = values / edges_b
-        inv_edges = 1.0 / edges_b
-        return {"estimated_value": weighted.sum(0) / inv_edges.sum(0)}
+        msgs = children.map(_per_child)
+        return {"estimated_value": msgs.weighted.sum(0) / msgs.inv_edge.sum(0)}
 
     return _sweep

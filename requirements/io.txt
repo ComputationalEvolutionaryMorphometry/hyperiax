@@ -1,5 +1,0 @@
-# Optional extra: Newick I/O via ete3.
-# Mirrors [project.optional-dependencies].io in pyproject.toml.
-# Install with:  pip install -r requirements/io.txt
--r base.txt
-ete3>=3.1

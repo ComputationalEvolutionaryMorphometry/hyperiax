@@ -25,22 +25,16 @@ def test_from_parents_basic_structure():
     np.testing.assert_array_equal(topo.node_depths, [0, 1, 1, 2, 2, 2, 2])
 
 
-def test_from_parents_detects_equal_degree_and_builds_gather():
+def test_from_parents_detects_equal_degree():
     topo = Topology.from_parents([0, 0, 0, 1, 1, 2, 2])
     assert topo.equal_degree is True
     assert topo.max_degree == 2
-    assert topo.gather_child_idx is not None
-    np.testing.assert_array_equal(
-        topo.gather_child_idx,
-        [[1, 2], [3, 4], [5, 6], [0, 0], [0, 0], [0, 0], [0, 0]],
-    )
 
 
-def test_from_parents_unequal_degree_leaves_gather_none():
+def test_from_parents_unequal_degree():
     # Node 0 has 2 children; node 1 has 3 children; node 2 is a leaf with 0.
     topo = Topology.from_parents([0, 0, 0, 1, 1, 1])
     assert topo.equal_degree is False
-    assert topo.gather_child_idx is None
     assert topo.max_degree == 3
 
 
@@ -52,6 +46,15 @@ def test_from_parents_segment_layout():
     # Level 1 reduces into the root [0]; seg ids [0, 0].
     np.testing.assert_array_equal(topo.pbuckets[1:3], [0, 0])
     np.testing.assert_array_equal(topo.pbuckets_ref[1], [0])
+
+
+def test_from_parents_segment_layout_on_ragged_tree():
+    # node 1 has 3 children {3,4,5}; node 2 has 2 children {6,7}.
+    topo = Topology.from_parents([0, 0, 0, 1, 1, 1, 2, 2])
+    assert not topo.equal_degree
+    # Level 2 children [3..7] reduce into parents [1, 2] with seg ids [0,0,0,1,1].
+    np.testing.assert_array_equal(topo.pbuckets[3:8], [0, 0, 0, 1, 1])
+    np.testing.assert_array_equal(topo.pbuckets_ref[2], [1, 2])
 
 
 def test_from_parents_rejects_non_bfs_layout():
@@ -71,7 +74,6 @@ def test_topology_single_node():
     assert topo.depth == 0
     assert topo.is_root[0] and topo.is_leaf[0]
     assert topo.equal_degree is False
-    assert topo.gather_child_idx is None
 
 
 def test_topology_is_hashable_and_structurally_equal():
@@ -108,5 +110,3 @@ def test_topology_all_derived_arrays_are_numpy_not_jax():
     ]:
         val = getattr(topo, field_name)
         assert isinstance(val, np.ndarray), f"{field_name} should be np.ndarray, got {type(val)}"
-    if topo.gather_child_idx is not None:
-        assert isinstance(topo.gather_child_idx, np.ndarray)

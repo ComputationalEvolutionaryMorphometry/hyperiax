@@ -81,23 +81,54 @@ class Parent(_FieldsView):
 
 
 class Children(_FieldsView):
-    """Per-parent view of children-of-each-node data.
+    """View of the children of all parents at the current up-sweep level.
 
-    **Equal-degree mode:** each attribute is a real JAX array of shape
-    ``(scope_size, k, *trailing)`` where ``k`` is the (constant) number of
-    children per parent. Free to slice, index, multiply — anything you would
-    do with a regular array. ``children.value.mean(0)`` averages over the
-    ``k`` children of each parent.
+    Each attribute is a :class:`ChildrenAxis` proxy backed by a flat
+    ``(M_total, *trailing)`` block (every child at the level concatenated)
+    plus segment ids. The proxy exposes:
 
-    **Unequal-degree mode:** each attribute is a :class:`ChildrenAxis` proxy
-    exposing the same reduction surface (``.sum/.max/.min/.prod/.mean``) but
-    dispatching to :func:`jax.ops.segment_*`. User code is identical to the
-    equal-degree case.
+    - **reductions** ``.sum / .max / .min / .prod / .mean (axis=0)`` —
+      dispatched to ``jax.ops.segment_*``, yielding per-parent results;
+    - :meth:`map` — a segment-preserving per-child ``jax.vmap``, so a
+      non-linear per-child transform feeds the same reduction surface.
+
+    Direct array ops (indexing, arithmetic, ``__array__``) are deliberately
+    rejected: use ``children.map(fn)`` for any non-reduction per-child work.
     """
 
     __slots__ = ()
     _kind = "Children"
     _reads_arg = "reads_children"
+
+    def map(self, fn):
+        """Apply ``fn`` to each child, preserving the children axis.
+
+        ``fn`` receives a per-child :class:`Node` view (the children fields,
+        one child at a time) and returns a ``dict[str, jax.Array]``. The result
+        is a new :class:`Children` view of the per-child outputs whose fields
+        are :class:`ChildrenAxis` proxies sharing the input segments, so
+        trailing reductions (``msgs.field.sum(0)`` / ``.mean(0)`` / ...)
+        dispatch to ``jax.ops.segment_*``.
+
+        This lets a sweep apply a non-linear per-child transform and then fuse
+        with the same body regardless of degree (equal trees are just the
+        special case where all segments have the same size).
+        """
+        fields = self._fields
+        if not fields:
+            return Children({})
+        per_child = jax.vmap(lambda rec: fn(Node(rec)))
+        sample = next(iter(fields.values()))
+        out = per_child({k: v.flat for k, v in fields.items()})
+        seg, nseg = sample._segments, sample._num_segments
+        return Children(
+            {
+                k: ChildrenAxis(
+                    flat=v, segments=seg, num_segments=nseg, trailing=v.shape[1:]
+                )
+                for k, v in out.items()
+            }
+        )
 
 
 class ChildrenAxis:
@@ -133,6 +164,13 @@ class ChildrenAxis:
         self._segments = segments
         self._num_segments = num_segments
         self._trailing = tuple(trailing)
+
+    @property
+    def flat(self) -> jax.Array:
+        """The backing flat ``(M_total, *trailing)`` array (all children of the
+        level concatenated, in node order). Used by :meth:`Children.map` and by
+        the dispatcher's per-child (``writes_children``) scatter."""
+        return self._flat
 
     # ── reductions ────────────────────────────────────────────────────
     def sum(self, axis: int = 0) -> jax.Array:

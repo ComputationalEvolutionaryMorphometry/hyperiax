@@ -13,8 +13,10 @@ from hyperiax.core import (
     Topology,
     Tree,
     down,
+    from_newick,
     from_parents,
     symmetric_topology,
+    to_newick,
     up,
 )
 
@@ -31,7 +33,9 @@ __all__ = [
     "Topology",
     "Tree",
     "down",
+    "from_newick",
     "from_parents",
     "symmetric_topology",
+    "to_newick",
     "up",
 ]

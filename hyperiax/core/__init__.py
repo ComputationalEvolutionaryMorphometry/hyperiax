@@ -5,7 +5,7 @@ imported from this package. Everything else (Newick I/O, prebuilt
 models, plotting, MCMC) lives outside ``hyperiax.core``.
 """
 
-from .builders import from_parents, symmetric_topology
+from .builders import from_newick, from_parents, symmetric_topology, to_newick
 from .errors import HyperiaxError, MissingField, SchemaMismatch
 from .schema import FieldSpec, Schema
 from .sweep import SweepFn, down, up
@@ -26,7 +26,9 @@ __all__ = [
     "Topology",
     "Tree",
     "down",
+    "from_newick",
     "from_parents",
     "symmetric_topology",
+    "to_newick",
     "up",
 ]

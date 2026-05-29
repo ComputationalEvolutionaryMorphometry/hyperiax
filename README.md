@@ -15,13 +15,10 @@ Initially, _Hyperiax_ was designed for phylogenetic analysis of biological shape
 
 ## Installation (development, v3 branch)
 
-Python 3.11 or newer is required. Two install paths are supported; pick one:
-
-### Option A — `uv` (recommended, fastest)
-
-Hyperiax v3 primarily uses [`uv`](https://docs.astral.sh/uv/) to manage the
-Python environment. `pyproject.toml` is the single source of truth; the
-`uv.lock` checked into the repo pins a reproducible resolution.
+Python 3.11 or newer is required. Hyperiax v3 uses
+[`uv`](https://docs.astral.sh/uv/) to manage the Python environment —
+`pyproject.toml` is the single source of truth and the checked-in `uv.lock`
+pins a reproducible resolution.
 
 ```bash
 # Install uv (macOS)
@@ -32,14 +29,8 @@ git clone git@github.com:ComputationalEvolutionaryMorphometry/hyperiax.git
 cd hyperiax
 git switch v3
 
-# Create the project venv with the dev group (test + lint + docs tooling).
+# Create the project venv: core CPU runtime + dev group (test + lint + docs).
 uv sync --group dev
-
-# Optional extras:
-#   - io:        ete3-backed Newick I/O
-#   - prebuilt:  diffrax + jax-tqdm for the BFFG / MCMC prebuilt models
-#   - notebook:  jupyter + matplotlib + optax for the tutorial notebooks
-uv sync --group dev --extra io --extra prebuilt --extra notebook
 
 # Run tests
 uv run pytest
@@ -48,49 +39,27 @@ uv run pytest
 uv run pre-commit install
 ```
 
-### Option B — conda + pip (traditional)
-
-For environments where `uv` isn't an option, equivalent `conda` / `pip` files
-are mirrored from `pyproject.toml` under `requirements/`:
-
-```
-requirements/
-├── base.txt        # core: jax, jaxlib, numpy
-├── io.txt          # adds ete3
-├── prebuilt.txt    # adds diffrax + jax-tqdm (+ pinned equinox chain)
-├── notebook.txt    # adds matplotlib / jupyter / optax for tutorials
-└── dev.txt         # everything above + pytest / ruff / sphinx
-```
-
-One-shot full dev environment:
+The core runtime is **CPU JAX** (`jax`, `jaxlib`, `numpy`) — the cleanest
+install, works everywhere. For a CUDA 12 machine, add the single `gpu` extra,
+which layers the CUDA jaxlib plugin on top:
 
 ```bash
-conda env create -f environment.yml
-conda activate hyperiax
+uv sync --group dev --extra gpu
 ```
 
-Or piece it together manually:
+Plain `pip` works too, with `pyproject.toml` as the source of truth:
 
 ```bash
-conda create -n hyperiax python=3.12
-conda activate hyperiax
-
-pip install -e .                                 # core only
-pip install -e . -r requirements/prebuilt.txt    # core + an extra
-pip install -e . -r requirements/dev.txt         # full dev setup
+pip install -e .            # core (CPU)
+pip install -e '.[gpu]'     # core + CUDA 12
 ```
-
-> The conda environment intentionally lets conda manage **only Python** —
-> all other packages come from PyPI via pip, to stay in sync with the
-> uv-resolved versions and avoid ABI mismatches between conda-forge JAX
-> and PyPI-built `diffrax` / `equinox`.
 
 ## Project layout (v3)
 
 ```
 hyperiax/
 ├── core/                 # L1 — Topology, Tree, sweep decorators (no external deps)
-├── io/                   # L2 — Newick I/O via ete3
+├── io/                   # L2 — Newick I/O
 └── prebuilt/             # L2 — phylo_mean, BFFG (Gaussian/SDE), MCMC, SDE utilities
 ```
 

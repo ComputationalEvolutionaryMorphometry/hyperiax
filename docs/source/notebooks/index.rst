@@ -13,6 +13,6 @@ the ``notebooks`` extra and run the ``.ipynb`` files in
    02_writing_sweeps
    03_phylo_mean
    04_phylo_bayesian
-   05_gaussian_mcmc
-   06_gaussian_mle
+   05_gaussian_bffg
+   06_gaussian_nuts
    07_sde_mcmc

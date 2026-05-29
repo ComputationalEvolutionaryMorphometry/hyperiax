@@ -3,7 +3,6 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 from hyperiax import Topology, Tree, symmetric_topology
 from hyperiax.prebuilt import phylo_mean
@@ -139,11 +138,10 @@ def test_phylo_mean_composes_under_outer_jit():
 
 def test_phylo_mean_runs_on_newick_tree():
     """End-to-end: read a tree from Newick, run phylo_mean."""
-    pytest.importorskip("ete3")
-    from hyperiax.io import newick
+    from hyperiax import from_newick
 
     src = "((A:1,B:1):2,(C:0.5,D:1.5):0.5);"
-    tree = newick.read(src, schema={"estimated_value": ()})
+    tree = from_newick(src, schema={"estimated_value": ()})
     # Leaf indices in BFS order: identify leaves and seed.
     leaf_vals = jnp.array([1.0, 2.0, 3.0, 4.0])
     tree = tree.at[tree.topology.is_leaf].set(estimated_value=leaf_vals)
@@ -154,22 +152,32 @@ def test_phylo_mean_runs_on_newick_tree():
     assert min(leaf_vals.tolist()) <= root_est <= max(leaf_vals.tolist())
 
 
-# ── unequal-degree gracefully unsupported (for now) ────────────────
-def test_phylo_mean_on_unequal_degree_tree_raises_or_runs_gracefully():
-    """Until the ChildrenAxis proxy supports elementwise arithmetic, the
-    unequal-degree path can't run phylo_mean. The dispatcher raises
-    NotImplementedError for the unequal path."""
-    topo = Topology.from_parents([0, 0, 0, 1, 1, 1, 2, 2])  # ragged
+# ── unequal-degree works via children.map ──────────────────────────
+def test_phylo_mean_on_unequal_degree_tree():
+    """Ragged-arity trees are supported: per-child work goes through
+    children.map, the fusion through segment reductions."""
+    # node 1 has 3 children (3,4,5); node 2 has 2 children (6,7); root has 2 (1,2).
+    topo = Topology.from_parents([0, 0, 0, 1, 1, 1, 2, 2])
+    assert not topo.equal_degree
+    leaves = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])  # nodes 3..7
     tree = (
         Tree.empty(topo, {"estimated_value": (), "edge_length": ()})
-        .set(edge_length=jnp.ones(topo.size))
+        .set(edge_length=jnp.array([0.0, 0.5, 0.5, 1.0, 1.0, 1.0, 2.0, 2.0]))
         .at[topo.is_leaf]
-        .set(estimated_value=jnp.array([1.0, 2.0, 3.0, 4.0, 5.0]))
+        .set(estimated_value=leaves)
     )
-    sweep = phylo_mean()
-    # Expect either: the unequal dispatcher rejects the proxy's reshape,
-    # OR (future) it works. For Stage 7 we accept either outcome but the
-    # current state is: it will raise inside the proxy when reshape is
-    # called on it.
-    with pytest.raises((Exception,)):
-        sweep(tree)
+
+    out = phylo_mean()(tree)
+
+    # Hand reference per parent:  sum_c (v_c / l_c) / sum_c (1 / l_c).
+    def wmean(vs, ls):
+        return float((vs / ls).sum() / (1.0 / ls).sum())
+
+    n1 = wmean(leaves[:3], jnp.array([1.0, 1.0, 1.0]))  # children 3,4,5
+    n2 = wmean(leaves[3:], jnp.array([2.0, 2.0]))       # children 6,7
+    root = wmean(jnp.array([n1, n2]), jnp.array([0.5, 0.5]))
+    assert jnp.allclose(out["estimated_value"][1], n1)
+    assert jnp.allclose(out["estimated_value"][2], n2)
+    assert jnp.allclose(out["estimated_value"][0], root)
+    # Leaves untouched.
+    assert jnp.array_equal(out["estimated_value"][topo.is_leaf], leaves)

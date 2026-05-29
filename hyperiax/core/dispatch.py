@@ -2,10 +2,12 @@
 
 The dispatcher walks a Tree's levels in the right order, builds per-level
 :class:`Node`/:class:`Children` views over sliced/gathered JAX arrays,
-calls the user's sweep function (under :func:`jax.vmap` for the down sweep
-and the equal-degree up sweep), and scatters the writes into a new data
+calls the user's sweep function, and scatters the writes into a new data
 dict. The whole thing is a pure ``Tree -> Tree`` function so it composes
 with ``jax.jit`` and ``jax.lax.scan`` without leaking state.
+
+Up-sweeps run on a single segment-based path that handles any topology
+(equal- or unequal-degree). Down-sweeps vmap over nodes at each level.
 """
 
 from __future__ import annotations
@@ -28,26 +30,17 @@ if TYPE_CHECKING:
 def up_dispatch(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     """Run an up-sweep on a Tree. Returns a new Tree.
 
-    Picks one of two internal paths based on the topology:
-
-    - **Equal-degree** (every non-leaf has the same arity): use
-      ``topo.gather_child_idx`` to build a dense ``(scope, k, *trailing)``
-      array per field, then :func:`jax.vmap` the user function over the
-      scope axis so it sees one parent at a time.
-    - **Unequal-degree**: use the level's ``pbuckets`` / ``pbuckets_ref``
-      to feed each ``children.X`` access through a :class:`ChildrenAxis`
-      proxy that dispatches reductions to ``jax.ops.segment_*``.
+    One segment-based path handles any topology. At each parent level the
+    children one level deeper are exposed via :class:`ChildrenAxis` proxies
+    over a flat ``(M_total, *trailing)`` block: pure reductions
+    (``children.X.sum/.mean/.max/.min/.prod(0)``) dispatch to
+    ``jax.ops.segment_*``; per-child transforms go through
+    :meth:`Children.map` (a segment-preserving vmap). ``writes`` outputs
+    scatter to the parent node ids; ``writes_children`` outputs scatter
+    contiguously to the flat child block.
     """
     _validate_schema(sweep, tree)
-    if sweep.writes_children and not tree.topology.equal_degree:
-        raise NotImplementedError(
-            "writes_children currently requires an equal-degree topology; the "
-            "unequal-degree segment-reduction path has no analogous per-child "
-            "write layout."
-        )
-    if tree.topology.equal_degree:
-        return _up_dispatch_equal(sweep, tree, params, key)
-    return _up_dispatch_unequal(sweep, tree, params, key)
+    return _up_dispatch(sweep, tree, params, key)
 
 
 def down_dispatch(sweep: SweepFn, tree: Tree, params, key) -> Tree:
@@ -84,19 +77,24 @@ def _check_writes(out, expected: frozenset, declared: tuple, *, direction: str) 
         )
 
 
-# ── equal-degree up dispatch ────────────────────────────────────────
+# ── up dispatch (single segment-based path) ────────────────────────
 @partial(jax.jit, static_argnums=(0,))
-def _up_dispatch_equal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
-    """Up sweep on a tree where every non-leaf has the same arity.
+def _up_dispatch(sweep: SweepFn, tree: Tree, params, key) -> Tree:
+    """Up sweep over any tree (equal- or unequal-degree).
 
-    Each level builds a dense ``(scope, k, *trailing)`` children array via
-    ``gather_child_idx``; :func:`jax.vmap` lifts the user fn to a
-    per-parent view (``node.value : (*trailing,)``, ``children.value :
-    (k, *trailing)``).
+    At each parent level, the children one level deeper are concatenated
+    into a flat ``(M_total, *trailing)`` view and assigned segment ids via
+    ``topo.pbuckets``. The user's ``children.X.sum(0)`` (or .max/.mean/...)
+    dispatches to the corresponding ``jax.ops.segment_*`` through a
+    :class:`ChildrenAxis` proxy; a per-child transform goes through
+    :meth:`Children.map`, which vmaps over the flat children and re-wraps the
+    outputs as segment-aware proxies. No outer vmap over parents is needed —
+    the body is called once per level with batched ``node`` data.
 
-    Per-parent return values are scattered to the parent slot
-    (``self_idx``); per-child return values declared in ``writes_children``
-    are scattered to each parent's children slots (``child_idx.reshape(-1)``).
+    Per-parent (``writes``) outputs are scattered to the parent node ids; per-
+    child (``writes_children``) outputs are segment-aware proxies whose flat
+    block is the children in node order, so they scatter contiguously to
+    ``[child_ls, child_le)``.
     """
     topo = tree.topology
     data = dict(tree.data)
@@ -109,59 +107,6 @@ def _up_dispatch_equal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
     child_writes = sweep.writes_children
     expected_writes = frozenset(parent_writes) | frozenset(child_writes)
     all_writes_decl = parent_writes + child_writes
-
-    per_level = jax.vmap(
-        lambda nd, cd, p: sweep.fn(Node(nd), Children(cd), p),
-        in_axes=(0, 0, None),
-    )
-
-    for level in range(topo.depth - 1, -1, -1):
-        non_leaf = topo.level_non_leaf_indices[level]
-        if non_leaf.size == 0:
-            continue
-
-        self_idx = jnp.asarray(non_leaf)
-        child_idx = jnp.asarray(topo.gather_child_idx[non_leaf])
-
-        node_data = {k: data[k][self_idx] for k in reads_self}
-        children_data = {k: data[k][child_idx] for k in reads_children}
-
-        out = per_level(node_data, children_data, params)
-        _check_writes(out, expected_writes, all_writes_decl, direction="Up-sweep")
-
-        for k in parent_writes:
-            data[k] = data[k].at[self_idx].set(out[k])
-
-        if child_writes:
-            flat_child = child_idx.reshape(-1)
-            for k in child_writes:
-                v = out[k]  # (n_parents, k, *trailing) after vmap
-                flat_v = v.reshape((-1,) + v.shape[2:])
-                data[k] = data[k].at[flat_child].set(flat_v)
-
-    return Tree(topology=topo, schema=tree.schema, data=data)
-
-
-# ── unequal-degree up dispatch (segment-reduction path) ────────────
-@partial(jax.jit, static_argnums=(0,))
-def _up_dispatch_unequal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
-    """Up sweep on a tree with ragged arity.
-
-    At each parent level, the children one level deeper are concatenated
-    into a flat ``(M_total, *trailing)`` view and assigned segment ids via
-    ``topo.pbuckets``. The user's ``children.X.sum(0)`` (or .max/.mean/...)
-    dispatches to the corresponding ``jax.ops.segment_*`` through a
-    :class:`ChildrenAxis` proxy. No vmap is needed — proxy reductions
-    return per-parent shape ``(num_parents, *trailing)`` directly.
-    """
-    topo = tree.topology
-    data = dict(tree.data)
-    reads_self, reads_children = _resolve_reads(
-        sweep.reads,
-        sweep.reads_children,
-        tree.schema.names,
-    )
-    expected_writes = frozenset(sweep.writes)
     schema = tree.schema
 
     for level in range(topo.depth - 1, -1, -1):
@@ -187,10 +132,15 @@ def _up_dispatch_unequal(sweep: SweepFn, tree: Tree, params, key) -> Tree:
         }
 
         out = sweep.fn(Node(node_data), Children(children_data), params)
-        _check_writes(out, expected_writes, sweep.writes, direction="Up-sweep")
+        _check_writes(out, expected_writes, all_writes_decl, direction="Up-sweep")
 
-        for k, v in out.items():
-            data[k] = data[k].at[parent_idx_jax].set(v)
+        for k in parent_writes:
+            data[k] = data[k].at[parent_idx_jax].set(out[k])
+
+        for k in child_writes:
+            # out[k] is a ChildrenAxis whose flat block is the children at this
+            # level in node order, i.e. exactly data[k][child_ls:child_le].
+            data[k] = data[k].at[child_ls:child_le].set(out[k].flat)
 
     return Tree(topology=topo, schema=tree.schema, data=data)
 

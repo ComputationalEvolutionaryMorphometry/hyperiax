@@ -1,9 +1,11 @@
 """Architectural lint: enforce the L1/L2 layering between subpackages.
 
-- L1 (``hyperiax.core``): no optional / heavy deps, no L2 imports.
-- L2 (``hyperiax.io``, ``hyperiax.prebuilt``): may import L1; must not
-  import each other; optional external deps must be lazy (function-local
-  import) so ``import hyperiax`` works with just JAX installed.
+- L1 (``hyperiax.core``): no optional / heavy deps. Newick I/O lives here
+  too (pure-Python parser in ``core/builders.py``), so ``ete3`` must never
+  appear.
+- L2 (``hyperiax.prebuilt``): may import L1; optional external deps must be
+  lazy (function-local import) so ``import hyperiax`` works with just JAX
+  installed.
 
 Covers T-16 plus the cross-package layering rules.
 """
@@ -30,11 +32,15 @@ FORBIDDEN_IMPORTS = (
 )
 
 
-def _core_files() -> list[Path]:
+def _l1_files() -> list[Path]:
+    """All L1 source files: ``hyperiax.core`` and ``hyperiax.utils``."""
     here = Path(__file__).resolve().parent.parent
-    core_dir = here / "hyperiax" / "core"
-    assert core_dir.is_dir(), f"expected core/ at {core_dir}"
-    return sorted(core_dir.rglob("*.py"))
+    paths: list[Path] = []
+    for pkg in ("core", "utils"):
+        pkg_dir = here / "hyperiax" / pkg
+        assert pkg_dir.is_dir(), f"expected {pkg}/ at {pkg_dir}"
+        paths.extend(pkg_dir.rglob("*.py"))
+    return sorted(paths)
 
 
 def _imports_in(path: Path) -> list[tuple[int, str, bool]]:
@@ -54,22 +60,20 @@ def _imports_in(path: Path) -> list[tuple[int, str, bool]]:
 
 
 @pytest.mark.parametrize("forbidden", FORBIDDEN_IMPORTS)
-def test_core_does_not_import(forbidden: str) -> None:
-    """No file under ``hyperiax/core`` may import the forbidden package."""
+def test_l1_does_not_import(forbidden: str) -> None:
+    """No L1 file (core/ or utils/) may import the forbidden package."""
     offenders: list[str] = []
-    for path in _core_files():
+    for path in _l1_files():
         for line_no, top, is_relative in _imports_in(path):
             if is_relative:
                 continue
             if top == forbidden:
                 offenders.append(f"{path.relative_to(path.parents[2])}:{line_no}: {top}")
-    assert not offenders, f"hyperiax.core must not import {forbidden!r}; found:\n" + "\n".join(
-        offenders
-    )
+    assert not offenders, f"L1 must not import {forbidden!r}; found:\n" + "\n".join(offenders)
 
 
-def test_core_only_imports_allowed_top_level_packages() -> None:
-    """Whitelist: every absolute import in ``core/*.py`` resolves to
+def test_l1_only_imports_allowed_top_level_packages() -> None:
+    """Whitelist: every absolute import in L1 (core/ + utils/) resolves to
     ``jax``, ``numpy``, ``hyperiax``, or a stdlib module.
     """
     import importlib.util
@@ -78,7 +82,7 @@ def test_core_only_imports_allowed_top_level_packages() -> None:
     allowed_external = {"jax", "numpy", "hyperiax"}
     base = Path(sys.base_prefix).resolve()
     offenders: list[str] = []
-    for path in _core_files():
+    for path in _l1_files():
         for line_no, top, is_relative in _imports_in(path):
             if is_relative or not top:
                 continue
@@ -99,51 +103,40 @@ def test_core_only_imports_allowed_top_level_packages() -> None:
                 pass
             offenders.append(f"{path.name}:{line_no}: imports non-stdlib non-allowed {top!r}")
     assert not offenders, (
-        "core/ may only import jax, numpy, hyperiax, or stdlib; found:\n" + "\n".join(offenders)
+        "L1 (core/ + utils/) may only import jax, numpy, hyperiax, or stdlib; found:\n"
+        + "\n".join(offenders)
     )
 
 
-# ── L2 layering: io / prebuilt sibling isolation ───────────────────
+def test_utils_does_not_import_core_or_prebuilt() -> None:
+    """``hyperiax.utils`` is a standalone L1 numerics layer: it must not
+    depend on the tree primitives in ``hyperiax.core`` nor on the L2
+    ``hyperiax.prebuilt`` package.
+    """
+    offenders: list[str] = []
+    for path in _subpkg_files("utils"):
+        src = path.read_text(encoding="utf-8")
+        tree = ast.parse(src, filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                # Relative import escaping utils (level>=2 climbs to hyperiax.*).
+                if node.level >= 2 or module.startswith(("hyperiax.core", "hyperiax.prebuilt")):
+                    offenders.append(f"{path.name}:{node.lineno}: {'.' * node.level}{module}")
+    assert not offenders, (
+        "utils/ must not import from hyperiax.core or hyperiax.prebuilt:\n" + "\n".join(offenders)
+    )
+
+
+# ── L2 layering: prebuilt isolation ────────────────────────────────
 def _subpkg_files(subpkg: str) -> list[Path]:
     here = Path(__file__).resolve().parent.parent
     pkg_dir = here / "hyperiax" / subpkg
     return sorted(pkg_dir.rglob("*.py")) if pkg_dir.is_dir() else []
 
 
-def test_io_does_not_import_prebuilt() -> None:
-    """``hyperiax.io`` must not depend on ``hyperiax.prebuilt`` (sibling L2)."""
-    offenders: list[str] = []
-    for path in _subpkg_files("io"):
-        for line_no, top, is_relative in _imports_in(path):
-            # Absolute import of hyperiax.prebuilt:
-            if not is_relative and top == "hyperiax":
-                # peek at full module name in the AST
-                src = path.read_text(encoding="utf-8")
-                tree = ast.parse(src, filename=str(path))
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.ImportFrom) and node.lineno == line_no:
-                        if (node.module or "").startswith("hyperiax.prebuilt"):
-                            offenders.append(f"{path.name}:{line_no}: {node.module}")
-    assert not offenders, "io/ must not import from hyperiax.prebuilt:\n" + "\n".join(offenders)
-
-
-def test_prebuilt_does_not_import_io() -> None:
-    """``hyperiax.prebuilt`` must not depend on ``hyperiax.io`` (sibling L2)."""
-    offenders: list[str] = []
-    for path in _subpkg_files("prebuilt"):
-        for line_no, top, is_relative in _imports_in(path):
-            if not is_relative and top == "hyperiax":
-                src = path.read_text(encoding="utf-8")
-                tree = ast.parse(src, filename=str(path))
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.ImportFrom) and node.lineno == line_no:
-                        if (node.module or "").startswith("hyperiax.io"):
-                            offenders.append(f"{path.name}:{line_no}: {node.module}")
-    assert not offenders, "prebuilt/ must not import from hyperiax.io:\n" + "\n".join(offenders)
-
-
 # Optional deps that must stay function-local (lazy) in L2 modules.
-LAZY_REQUIRED = ("ete3", "diffrax", "jax_tqdm")
+LAZY_REQUIRED = ("jax_tqdm",)
 
 
 def _bare_top_level_imports(tree: ast.Module) -> list[ast.AST]:
@@ -165,10 +158,9 @@ def test_l2_does_not_import_optional_deps_at_module_top(forbidden: str) -> None:
     would break ``import hyperiax`` for users without the relevant extra.
 
     Acceptable forms: (a) function-local import; (b) module-level import
-    inside a ``try / except ImportError`` block (the ``prebuilt/mcmc.py``
-    pattern, where ``run_chain`` degrades gracefully without ``jax_tqdm``).
+    inside a ``try / except ImportError`` block.
     """
-    paths = _subpkg_files("io") + _subpkg_files("prebuilt")
+    paths = _subpkg_files("prebuilt")
     offenders: list[str] = []
     for path in paths:
         src = path.read_text(encoding="utf-8")

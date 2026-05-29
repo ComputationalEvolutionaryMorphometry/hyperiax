@@ -26,36 +26,11 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-# Newick I/O via ete3.
-io = [
-    "ete3>=3.1",
+gpu = [
+    "jax[cuda12]>=0.4.30",
 ]
-# All prebuilt models — diffrax powers the ODE-integrated BFFG backward
-# filter; jax-tqdm decorates MCMC run_chain with per-chain progress bars
-# (imports are guarded so the core path still runs without them).
-# equinox 0.13.8 ships a broken wheel; pin below it until upstream fixes.
-# Install via:   uv sync --extra prebuilt
-prebuilt = [
-    "diffrax>=0.6",
-    # The equinox / jaxtyping / wadler-lindig / optimistix family must move
-    # together. Current bleeding edges (equinox 0.13.8, jaxtyping 0.3.x,
-    # wadler-lindig 0.1.7, optimistix 0.1.0) are mutually incompatible with
-    # the diffrax 0.7.x we use. Pin the whole chain at the last known-good
-    # set until upstream restabilises.
-    "equinox<0.13.8",
-    "jaxtyping<0.3",
-    "wadler-lindig<0.1.7",
-    "optimistix<0.1",
-    "jax-tqdm>=0.4",
-]
-# Notebook tutorials in docs/source/notebooks/.
-# Install via:   uv sync --extra notebook
-notebook = [
-    "matplotlib>=3.8",
-    "jupyter>=1.0",
-    "ipykernel>=6.29",
-    "joblib>=1.4",
-    "optax>=0.2",
+numpyro = [
+    "numpyro>=0.15",
 ]
 
 [project.urls]
@@ -80,25 +55,27 @@ tag_regex = "^v(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+(?:[a-z0-9.+-]*)?)$"
 fallback_version = "3.0.0"
 
 # ── uv-specific configuration ─────────────────────────────────────────────
-# Dev-only dependencies (PEP 735 dependency groups).
-# `dev` bundles test, lint and docs tooling — everything a contributor needs.
-# Install via:   uv sync --group dev
-# With extras:   uv sync --all-extras --group dev
 [dependency-groups]
 dev = [
+    # test + lint
     "pytest>=8",
     "pytest-xdist>=3",
     "ruff>=0.6",
     "pre-commit>=3.7",
+    # docs (sphinx)
     "sphinx>=7.3",
     "furo>=2024.5",
     "myst-nb>=1.1",
     "sphinx-autodoc-typehints>=2.1",
     "sphinx-copybutton>=0.5",
+    # notebooks / examples
+    "ipykernel>=6.29",
+    "matplotlib>=3.8",
+    "joblib>=1.4",
+    "optax>=0.2",
 ]
 
 [tool.uv]
-# Pin a single resolution across all extras so toggling --extra doesn't churn the lockfile.
 required-version = ">=0.4"
 
 # ── pytest ────────────────────────────────────────────────────────────────

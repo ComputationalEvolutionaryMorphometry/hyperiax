@@ -32,8 +32,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Sync project (all extras + dev group)
-        run: uv sync --all-extras --group dev
+      - name: Sync project (core runtime + dev group)
+        run: uv sync --group dev
 
       - name: Build HTML (warnings as errors)
         run: uv run make -C docs html SPHINXOPTS=-W

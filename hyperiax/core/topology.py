@@ -45,11 +45,7 @@ class Topology:
     max_degree: int
     equal_degree: bool
 
-    # ── equal-degree gather layout (None when not equal-degree) ──
-    gather_child_idx: np.ndarray | None  # (N, max_degree) int32
-    level_non_leaf_indices: tuple  # tuple[np.ndarray, ...], one per level
-
-    # ── segment-reduction layout (always populated) ──
+    # ── segment-reduction layout (used by the up-sweep dispatcher) ──
     # For each node, its *local* segment id within its level. Used as
     # ``segment_ids`` for ``jax.ops.segment_*`` during up-sweeps.
     pbuckets: np.ndarray  # (N,) int32
@@ -155,18 +151,6 @@ def _build_topology(parents_in, names) -> Topology:
     )
     max_degree = int(child_counts.max())
 
-    # ── gather_child_idx for the equal-degree fast path ──
-    gather_child_idx: np.ndarray | None = None
-    if equal_degree and max_degree > 0:
-        k = max_degree
-        gather_child_idx = np.zeros((n, k), dtype=np.int32)
-        next_slot = np.zeros(n, dtype=np.int32)
-        for i in range(1, n):
-            p = int(parents[i])
-            slot = int(next_slot[p])
-            gather_child_idx[p, slot] = i
-            next_slot[p] = slot + 1
-
     # ── segment-reduction layout: pbuckets / pbuckets_ref ──
     # For each level (taken bottom-up by the up-sweep), pvals = parent ids of the
     # nodes in this level. ``unique`` produces (a) the destination parent ids and
@@ -180,13 +164,6 @@ def _build_topology(parents_in, names) -> Topology:
         pbuckets[lo:hi] = inv.astype(np.int32)
         pbuckets_ref.append(uniq.astype(np.int32))
 
-    # ── per-level non-leaf indices (used by equal-degree up dispatch) ──
-    level_non_leaf_indices: list = []
-    for d in range(depth + 1):
-        lo, hi = int(level_starts[d]), int(level_starts[d + 1])
-        rng = np.arange(lo, hi, dtype=np.int32)
-        level_non_leaf_indices.append(rng[~is_leaf[lo:hi]])
-
     return Topology(
         parents=parents,
         size=n,
@@ -199,8 +176,6 @@ def _build_topology(parents_in, names) -> Topology:
         is_inner=is_inner,
         max_degree=max_degree,
         equal_degree=equal_degree,
-        gather_child_idx=gather_child_idx,
-        level_non_leaf_indices=tuple(level_non_leaf_indices),
         pbuckets=pbuckets,
         pbuckets_ref=tuple(pbuckets_ref),
         names=tuple(names) if names is not None else None,

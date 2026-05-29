@@ -1,8 +1,9 @@
 .PHONY: test sync
 
-# Install all dev + extras into the project venv (uv-managed).
+# Install the core (CPU) runtime + dev group into the project venv (uv-managed).
+# For a CUDA venv instead:  uv sync --group dev --extra gpu
 sync:
-	uv sync --all-extras --group dev
+	uv sync --group dev
 
 test:
 	uv run pytest
