@@ -15,4 +15,4 @@ the ``notebooks`` extra and run the ``.ipynb`` files in
    04_phylo_bayesian
    05_gaussian_bffg
    06_gaussian_nuts
-   07_sde_mcmc
+   07_sde_bffg

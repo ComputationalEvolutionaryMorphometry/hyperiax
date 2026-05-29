@@ -58,6 +58,7 @@ Ready-to-use sweeps and helpers for common message-passing tasks.
    hyperiax.prebuilt.bffg.discrete_bf_sweep
    hyperiax.prebuilt.bffg.discrete_forward_sweep
    hyperiax.prebuilt.bffg.discrete_fg_sweep
+   hyperiax.prebuilt.bffg.discrete_refine_anchor
 
 .. rubric:: BFFG — continuous-edge (SDE) sweeps
 
@@ -69,6 +70,7 @@ Ready-to-use sweeps and helpers for common message-passing tasks.
    hyperiax.prebuilt.bffg.continuous_bf_sweep
    hyperiax.prebuilt.bffg.continuous_forward_sweep
    hyperiax.prebuilt.bffg.continuous_fg_sweep
+   hyperiax.prebuilt.bffg.continuous_refine_anchor
 
 For MCMC over BFFG-guided latents and hyperparameters, hyperiax composes
 with `NumPyro <https://num.pyro.ai/>`_ — see :doc:`../notebooks/05_gaussian_bffg`

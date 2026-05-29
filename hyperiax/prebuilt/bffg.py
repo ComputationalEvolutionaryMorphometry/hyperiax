@@ -1,3 +1,44 @@
+"""Backward Filtering Forward Guiding (BFFG) on rooted directed trees.
+
+Implements the framework of van der Meulen & Sommer (2025), *Backward Filtering
+Forward Guiding*, JMLR 26(281), 1–51 (`arXiv:2505.18239
+<https://arxiv.org/abs/2505.18239>`_). Each tree edge is either:
+
+- **discrete** (§6.1, Theorem 14): a 1-step nonlinear-Gaussian Markov kernel
+  :math:`X_t \\mid X_{pa(t)}=x \\sim \\mathcal N(\\mu(x), Q(x))`, approximated
+  by a tractable linear-Gaussian auxiliary :math:`\\tilde X_t \\sim
+  \\mathcal N(\\Phi x + \\beta, Q_{\\text{aux}})`; or
+- **continuous** (§7.1, Theorem 23): an SDE
+  :math:`dX_u = b(u, X_u)\\,du + \\sigma(u, X_u)\\,dW_u` with a linear
+  auxiliary :math:`d\\tilde X_u = (B(u)\\tilde X_u + \\beta(u))\\,du +
+  \\tilde\\sigma(u)\\,dW_u`.
+
+The auxiliary is evaluated at a per-edge **linearisation anchor** (Algorithm 3
+§7.1) that the user iteratively refines toward the BFFG posterior mean.
+
+Typical workflow::
+
+    bf = continuous_bf_sweep(n_steps, B, beta, sigma_tilde)
+    refine = continuous_refine_anchor()
+    fg = continuous_fg_sweep(n_steps, b, sigma, B, beta, sigma_tilde)
+
+    tree = init_continuous_tree(empty, leaf_obs, obs_var=tau_sq, d=d,
+                                n_steps=n_steps, root_val=x_root)
+    for _ in range(n_lin_iters):
+        tree = bf(tree, params=theta)
+        tree = refine(tree, params=theta)
+    tree = tree.set(zs=z.reshape((N, n_steps, d)))
+    tree = fg(tree, params=theta)
+    # tree.vals — guided bridge trajectories; tree.log_corr — per-edge
+    # importance log-weights; tree.log_norm[0] — root marginal log-evidence.
+
+Schemas: see :func:`discrete_schema` and :func:`continuous_schema`.
+
+References:
+    van der Meulen, F. H. & Sommer, S. (2025). Backward Filtering Forward
+    Guiding. *JMLR* 26(281), 1–51. https://arxiv.org/abs/2505.18239
+"""
+
 from __future__ import annotations
 
 import jax
@@ -12,18 +53,68 @@ from ..utils.sde import EulerMaruyama, dot, solve, solve_sde
 
 # ── schema helpers ─────────────────────────────────────────────────
 def discrete_schema(d: int) -> dict[str, tuple[int, ...]]:
+    """Field layout for a discrete-edge BFFG tree.
+
+    Args:
+        d: State dimension.
+
+    Returns:
+        Mapping of field name to per-node trailing shape, suitable for
+        :class:`hyperiax.Schema.from_dict`. Fields:
+
+        - ``val: (d,)`` — node state (filled by the forward sweep).
+        - ``z: (d,)`` — i.i.d. standard-normal noise driving the forward sample.
+        - ``ptnl: (d,)`` — canonical-form potential ``F`` at the node (BF).
+        - ``prec: (d, d)`` — canonical-form precision ``H`` at the node (BF).
+        - ``anchor: (d,)`` — per-edge linearisation point for the auxiliary
+          kernel (Algorithm 3 §7.1); leaves are seeded at the observation,
+          internal nodes refined via :func:`discrete_refine_anchor`.
+        - ``log_norm: ()`` — canonical-message log-norm; sums up the tree so
+          ``log_norm[root]`` is the marginal log-evidence.
+        - ``log_corr: ()`` — per-edge importance log-weight from forward
+          guiding (Theorem 14.3).
+    """
     return {
         "val": (d,),
         "z": (d,),
         "ptnl": (d,),
         "prec": (d, d),
-        "anchor": (d,),         # per-edge linearisation point (Algorithm 3)
+        "anchor": (d,),
         "log_norm": (),
         "log_corr": (),
     }
 
 
 def continuous_schema(d: int, n_steps: int) -> dict[str, tuple[int, ...]]:
+    """Field layout for a continuous-edge (SDE) BFFG tree.
+
+    Args:
+        d: State dimension.
+        n_steps: Number of Euler-Maruyama / RK4 substeps per edge.
+
+    Returns:
+        Mapping of field name to per-node trailing shape. Each non-root node's
+        edge is discretised into ``n_steps`` substeps (``n_steps + 1`` time
+        points). Fields:
+
+        - ``edge_len: ()`` — Δt for this node's incoming edge.
+        - ``vals: (n_steps + 1, d)`` — forward-sampled trajectory along the edge.
+        - ``zs: (n_steps, d)`` — i.i.d. standard-normal increments driving the SDE.
+        - ``ptnls: (n_steps + 1, d)`` / ``precs: (n_steps + 1, d, d)`` —
+          per-step canonical ``(F, H)`` trajectory along the edge (BF).
+        - ``ptnl_v: (d,)`` / ``prec_v: (d, d)`` — vertex (fused) canonical
+          message at this node; written by the up-sweep, used as the terminal
+          condition for the next-level edge.
+        - ``anchor: (d,)`` — child-end linearisation point of this node's edge
+          (t = ``edge_len``); refined toward the BFFG posterior mean.
+        - ``anchor_pa: (d,)`` — parent-end linearisation point of this node's
+          edge (t = 0); cached on the child so the up-sweep can read both
+          endpoints inside ``children.map(...)``.
+        - ``log_norm: ()`` — canonical-message log-norm at the vertex; sums
+          up the tree so ``log_norm[root]`` is the marginal log-evidence.
+        - ``log_corr: ()`` — per-edge importance log-weight from forward
+          guiding (Theorem 23 eq 32 / Remark 24).
+    """
     return {
         "edge_len": (),
         "vals": (n_steps+1, d),
@@ -32,12 +123,6 @@ def continuous_schema(d: int, n_steps: int) -> dict[str, tuple[int, ...]]:
         "precs": (n_steps+1, d, d),
         "ptnl_v": (d,),
         "prec_v": (d, d),
-        # Two per-edge linearisation points (Algorithm 3 §7.1):
-        #   anchor    = posterior mean at THIS node = child end of the edge
-        #               above this node (t = T in forward time).
-        #   anchor_pa = posterior mean at the PARENT  = parent end of that
-        #               edge (t = 0). Stored on the child for direct access
-        #               in children.map(...) inside the up-sweep.
         "anchor": (d,),
         "anchor_pa": (d,),
         "log_norm": (),
@@ -80,6 +165,28 @@ def init_discrete_tree(
     root_val: jax.Array | None = None,
     anchor_init: jax.Array | None = None,
 ) -> Tree:
+    """Seed a discrete-edge BFFG tree with leaf observations and initial anchors.
+
+    Writes leaves' canonical-form message ``(prec, ptnl, log_norm)`` from the
+    isotropic-Gaussian likelihood :math:`y \\sim \\mathcal N(x, \\tau^2 I)` and
+    seeds every node's ``anchor`` (leaves at their observation, others at
+    ``anchor_init``). Optionally pins the root state.
+
+    Args:
+        tree: Empty tree with the schema returned by :func:`discrete_schema`.
+        leaf_obs: ``(n_leaves, d)`` leaf observations in BFS leaf order.
+        obs_var: Scalar observation variance :math:`\\tau^2`.
+        d: State dimension.
+        root_val: Optional ``(d,)`` value to pin at the root (writes the
+            ``val`` field). Required by samplers that condition on a fixed
+            root.
+        anchor_init: Optional ``(d,)`` initial anchor for non-leaf nodes
+            (defaults to ``root_val`` if given, else zeros).
+
+    Returns:
+        Tree with leaf canonical messages set, anchors seeded, and (optionally)
+        the root pinned.
+    """
     msgs = _canonical_leaf_messages(leaf_obs, obs_var, d=d)
     tree = tree.at[tree.topology.is_leaf].set(
         prec=msgs["prec"], ptnl=msgs["ptnl"], log_norm=msgs["log_norm"]
@@ -113,6 +220,32 @@ def init_continuous_tree(
     root_val: jax.Array | None = None,
     anchor_init: jax.Array | None = None,
 ) -> Tree:
+    """Seed a continuous-edge BFFG tree with leaf observations and initial anchors.
+
+    Writes leaves' **vertex** canonical message ``(prec_v, ptnl_v, log_norm)``
+    from the isotropic-Gaussian likelihood :math:`y \\sim \\mathcal N(x,
+    \\tau^2 I)` and seeds both ``anchor`` (leaves at observation, others at
+    ``anchor_init``) and ``anchor_pa``. The per-edge ``precs`` / ``ptnls``
+    trajectories are filled by :func:`continuous_bf_sweep`. Optionally pins
+    the root trajectory.
+
+    Args:
+        tree: Empty tree with the schema returned by :func:`continuous_schema`.
+            ``edge_len`` should already be set on each non-root node.
+        leaf_obs: ``(n_leaves, d)`` leaf observations in BFS leaf order.
+        obs_var: Scalar observation variance :math:`\\tau^2`.
+        d: State dimension.
+        n_steps: Number of substeps per edge (must match the schema).
+        root_val: Optional ``(d,)`` value to pin at the root (broadcast to the
+            root's full ``(n_steps + 1, d)`` ``vals`` trajectory).
+        anchor_init: Optional ``(d,)`` initial anchor for non-leaf nodes (and
+            for every node's ``anchor_pa`` before refinement). Defaults to
+            ``root_val`` if given, else zeros.
+
+    Returns:
+        Tree with leaf vertex messages set, both anchors seeded, and
+        (optionally) the root trajectory pinned.
+    """
     msgs = _canonical_leaf_messages(leaf_obs, obs_var, d=d)
     # Leaf observation = vertex message (terminal/initial condition for the
     # edge backward filter). The per-edge trajectory is filled by the up-sweep.
@@ -219,6 +352,30 @@ def _discrete_forward_guiding(x_pa, z, prec, ptnl, anchor, *,
 
 
 def discrete_bf_sweep(prxy_scale_fn, prxy_shift_fn, prxy_covar_fn) -> SweepFn:
+    """Build the discrete-edge backward-filtering up-sweep (Theorem 14 §6.1).
+
+    At each non-leaf parent, pulls each child's canonical message back through
+    the linear-Gaussian auxiliary :math:`\\tilde P(x, dy) = \\mathcal N(y;
+    \\Phi x + \\beta, Q)\\,dy` and fuses (sums) the contributions. The
+    auxiliary is evaluated per-child at the child's ``anchor``.
+
+    Args:
+        prxy_scale_fn: Callable ``(anchor, params) -> (d, d) array`` returning
+            the auxiliary scale matrix :math:`\\Phi`.
+        prxy_shift_fn: Callable ``(anchor, params) -> (d,) array`` returning
+            the auxiliary shift vector :math:`\\beta`.
+        prxy_covar_fn: Callable ``(anchor, params) -> (d, d) SPD array``
+            returning the auxiliary covariance :math:`Q`.
+
+    Returns:
+        A :class:`hyperiax.SweepFn` that, when applied to a tree, writes
+        ``(prec, ptnl, log_norm)`` at every non-leaf node.
+
+    Notes:
+        Linear-Gaussian models (auxiliary equal to truth) ignore ``anchor``;
+        for nonlinear models, iterate this sweep with
+        :func:`discrete_refine_anchor` (Algorithm 3 §7.1).
+    """
     @up(
         reads_children=("prec", "ptnl", "log_norm", "anchor"),
         writes=("prec", "ptnl", "log_norm"),
@@ -243,6 +400,26 @@ def discrete_bf_sweep(prxy_scale_fn, prxy_shift_fn, prxy_covar_fn) -> SweepFn:
     return _sweep
 
 def discrete_forward_sweep(mean_fn, covar_fn) -> SweepFn:
+    """Build the unconditional forward-sampling down-sweep.
+
+    Draws each non-root state from the true 1-step Gaussian kernel
+    :math:`X_t \\mid X_{pa} = x \\sim \\mathcal N(\\mu(x), Q(x))` using the
+    pre-stored noise :math:`z \\sim \\mathcal N(0, I)` in ``node.z``::
+
+        val = mean_fn(parent.val, params)
+              + chol(covar_fn(parent.val, params)) @ node.z
+
+    Args:
+        mean_fn: Callable ``(x_parent, params) -> (d,) array`` returning the
+            true conditional mean :math:`\\mu(x)`.
+        covar_fn: Callable ``(x_parent, params) -> (d, d) SPD array``
+            returning the true conditional covariance :math:`Q(x)`.
+
+    Returns:
+        A :class:`hyperiax.SweepFn` that writes ``val`` at every non-root node.
+        The root's ``val`` must be set by the caller (typically via
+        :func:`init_discrete_tree`'s ``root_val``).
+    """
     @down(
         reads_parent=("val",),
         reads=("z",),
@@ -258,6 +435,33 @@ def discrete_forward_sweep(mean_fn, covar_fn) -> SweepFn:
     return _sweep
 
 def discrete_fg_sweep(mean_fn, covar_fn, prxy_scale_fn, prxy_shift_fn, prxy_covar_fn) -> SweepFn:
+    """Build the discrete-edge forward-guided down-sweep (Theorem 14 §6.1).
+
+    For each non-root node, samples the guided proposal :math:`X_t^\\circ
+    \\sim \\mathcal N^{\\mathrm{can}}(F + Q(x)^{-1}\\mu(x),\\ H + Q(x)^{-1})`
+    using the parent state ``parent.val``, the node's canonical message
+    ``(prec, ptnl)``, the true kernel ``(mean_fn, covar_fn)``, and the noise
+    ``node.z``. Writes the importance log-weight
+
+    .. math::
+
+       \\log w = \\log\\varphi(H^{-1}F;\\ \\mu(x),\\ Q(x)+H^{-1})
+                - \\log\\varphi(H^{-1}F;\\ \\Phi x+\\beta,\\ Q_{\\mathrm{aux}}+H^{-1})
+
+    to ``log_corr`` (Theorem 14 step 3). Sum ``log_corr`` over non-root nodes
+    to get the path's importance correction.
+
+    Args:
+        mean_fn / covar_fn: True kernel ``(x_parent, params) -> array``.
+        prxy_scale_fn / prxy_shift_fn / prxy_covar_fn: Auxiliary kernel
+            ``(anchor, params) -> array`` (same callables fed to
+            :func:`discrete_bf_sweep`).
+
+    Returns:
+        A :class:`hyperiax.SweepFn` that writes ``(val, log_corr)`` at every
+        non-root node. Run :func:`discrete_bf_sweep` first to populate the
+        canonical messages.
+    """
     @down(
         reads_parent=("val",),
         reads=("z", "prec", "ptnl", "anchor"),
@@ -276,12 +480,22 @@ def discrete_fg_sweep(mean_fn, covar_fn, prxy_scale_fn, prxy_shift_fn, prxy_cova
 
 
 def discrete_refine_anchor() -> SweepFn:
-    """Per-node anchor refinement: new anchor = BFFG posterior mean H⁻¹F.
+    """Build the discrete anchor-refinement down-sweep (Algorithm 3 §7.1).
 
-    Called after a ``discrete_bf_sweep`` cycle in the iterative-linearisation
-    loop (Algorithm 3, JMLR §7.1). ``@down`` visits every non-root node, so
-    leaves and inner nodes both get refined. The root keeps its initial
-    anchor (it is pinned at ``root_val``).
+    Overwrites each non-root node's ``anchor`` with the BFFG-implied posterior
+    mean :math:`H^{-1} F` derived from the canonical message
+    ``(prec, ptnl)`` left by :func:`discrete_bf_sweep`. The root keeps its
+    initial anchor (it is pinned at ``root_val``).
+
+    Returns:
+        A :class:`hyperiax.SweepFn` that writes ``anchor`` at every non-root
+        node. Typical usage interleaves with the backward filter for several
+        iterations until the anchor — and thus the auxiliary linearisation —
+        converges::
+
+            for _ in range(n_lin_iters):
+                tree = bf(tree, params=theta)
+                tree = refine(tree, params=theta)
     """
     @down(reads=("prec", "ptnl"), writes=("anchor",))
     def _sweep(node, parent, params):
@@ -463,6 +677,34 @@ def _continuous_forward_guiding(x_pa, ts, dws, precs, ptnls,
     return jnp.vstack((xs, x_ch)), log_corr
 
 def continuous_bf_sweep(n_steps, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn) -> SweepFn:
+    """Build the continuous-edge backward-filtering up-sweep (Theorem 23 §7.1).
+
+    For each parent, integrates the auxiliary-SDE backward equation (eq 29)
+    over every child's edge — either analytically (closed form when
+    :math:`B = \\beta = 0`) or via :class:`hyperiax.utils.ode.RK4` — to
+    produce the per-step canonical ``(H, F)`` trajectory. Each edge is
+    linearised between two endpoint anchors (``anchor_pa`` at :math:`t = 0`
+    and ``anchor`` at :math:`t = \\tau_e`), with :math:`\\tilde a(t) =
+    \\tilde\\sigma\\tilde\\sigma^\\top` linearly interpolated. The trajectory
+    is scattered to the child (``writes_children``); the time-0 messages are
+    fused into the parent's vertex message ``(prec_v, ptnl_v, log_norm)``.
+
+    Args:
+        n_steps: Number of integration substeps per edge.
+        prxy_scale_fn: ``(t, anchor, params) -> (d, d)`` returning :math:`B(t)`,
+            or ``None`` to take the driftless analytic path (requires
+            ``prxy_shift_fn`` also ``None``).
+        prxy_shift_fn: ``(t, anchor, params) -> (d,)`` returning
+            :math:`\\beta(t)`, or ``None`` for the analytic path.
+        prxy_diffusion_fn: ``(t, anchor, params) -> (d, d)`` returning
+            :math:`\\tilde\\sigma(t)`; the auxiliary covariance is
+            :math:`\\tilde a = \\tilde\\sigma \\tilde\\sigma^\\top`.
+
+    Returns:
+        A :class:`hyperiax.SweepFn` that writes ``(prec_v, ptnl_v, log_norm)``
+        at every non-leaf node and the full ``(precs, ptnls)`` trajectories
+        at every non-root node.
+    """
     @up(
         reads_children=("edge_len", "prec_v", "ptnl_v", "log_norm", "anchor", "anchor_pa"),
         writes=("prec_v", "ptnl_v", "log_norm"),
@@ -511,6 +753,25 @@ def continuous_bf_sweep(n_steps, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn
     return _sweep
 
 def continuous_forward_sweep(n_steps, drift_fn, diffusion_fn) -> SweepFn:
+    """Build the unconditional SDE forward-sampling down-sweep.
+
+    For each non-root node, integrates the true SDE
+    :math:`dX_u = b(u, X_u)\\,du + \\sigma(u, X_u)\\,dW_u` from the parent's
+    terminal value ``parent.vals[-1]`` over the edge using Euler-Maruyama
+    and the pre-stored increments :math:`dW = \\sqrt{\\Delta t}\\, z` derived
+    from ``node.zs``.
+
+    Args:
+        n_steps: Number of Euler-Maruyama substeps per edge.
+        drift_fn: ``(t, x, params) -> (d,)`` returning the true drift.
+        diffusion_fn: ``(t, x, params) -> (d, noise)`` returning the true
+            diffusion matrix :math:`\\sigma(t, x)`.
+
+    Returns:
+        A :class:`hyperiax.SweepFn` that writes the full per-edge trajectory
+        to ``vals`` at every non-root node. The root's ``vals`` must be set by
+        the caller (typically via :func:`init_continuous_tree`'s ``root_val``).
+    """
     @down(
         reads_parent=("vals",),
         reads=("zs", "edge_len"),
@@ -526,6 +787,42 @@ def continuous_forward_sweep(n_steps, drift_fn, diffusion_fn) -> SweepFn:
     return _sweep
 
 def continuous_fg_sweep(n_steps, drift_fn, diffusion_fn, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn) -> SweepFn:
+    """Build the continuous-edge forward-guided down-sweep (Theorem 23 §7.1).
+
+    For each non-root node, integrates the guided SDE (eq 31)
+
+    .. math::
+
+       dX_u^\\circ = \\big(b(u, X_u^\\circ) + a(u, X_u^\\circ)(F(u) - H(u)X_u^\\circ)\\big)du
+                     + \\sigma(u, X_u^\\circ)\\,dW_u
+
+    from ``parent.vals[-1]`` over the edge, using the BF-cached
+    ``(precs, ptnls)`` trajectory as the guiding term and ``node.zs`` for the
+    noise. Writes the per-step Theorem-23 importance log-weight increment
+
+    .. math::
+
+       \\frac{(\\mathcal L - \\tilde{\\mathcal L})g}{g}
+         = (b - \\tilde b)\\cdot r - \\tfrac12 \\mathrm{tr}((a - \\tilde a) H)
+           + \\tfrac12 r^\\top(a - \\tilde a) r,
+         \\qquad r = F - H X^\\circ,
+
+    integrated over the edge into ``log_corr`` (Remark 24). Auxiliary
+    :math:`\\tilde a(t)` is linearly interpolated between the two anchors —
+    same convention as :func:`continuous_bf_sweep`.
+
+    Args:
+        n_steps: Number of substeps per edge.
+        drift_fn / diffusion_fn: True SDE ``(t, x, params) -> array``.
+        prxy_scale_fn / prxy_shift_fn / prxy_diffusion_fn: Auxiliary linear-SDE
+            ``(t, anchor, params) -> array`` (same callables fed to
+            :func:`continuous_bf_sweep`; pass ``None`` to ``prxy_scale_fn``
+            and ``prxy_shift_fn`` for the driftless analytic case).
+
+    Returns:
+        A :class:`hyperiax.SweepFn` that writes ``(vals, log_corr)`` at every
+        non-root node. Run :func:`continuous_bf_sweep` first.
+    """
     @down(
         reads_parent=("vals",),
         reads=("zs", "edge_len", "precs", "ptnls", "anchor", "anchor_pa"),
@@ -549,20 +846,27 @@ def continuous_fg_sweep(n_steps, drift_fn, diffusion_fn, prxy_scale_fn, prxy_shi
 
 
 def continuous_refine_anchor() -> SweepFn:
-    """Per-node anchor refinement for continuous-edge BFFG.
+    """Build the continuous anchor-refinement down-sweep (Algorithm 3 §7.1).
 
-    Writes two fields per non-root node:
+    Walks root → leaves, writing two fields per non-root node:
 
-    - ``anchor`` = ``prec_v⁻¹ ptnl_v`` — the BFFG-implied posterior mean at
-      THIS vertex (child end of the incoming edge).
-    - ``anchor_pa`` = ``parent.anchor`` — the parent's just-refined anchor,
-      stored on the child so the up-sweep can read both endpoints inside
-      ``children.map(...)`` without needing per-child gather.
+    - ``anchor = prec_v⁻¹ ptnl_v`` — the BFFG-implied posterior mean at THIS
+      vertex (child end of the incoming edge).
+    - ``anchor_pa = parent.anchor`` — the parent's just-refined anchor,
+      cached on the child so the next up-sweep can read both endpoints inside
+      ``children.map(...)`` without a segment-aware gather.
 
-    ``@down`` walks root → leaves, so ``parent.anchor`` reads the parent's
+    Because ``@down`` proceeds top-down, ``parent.anchor`` reads the parent's
     UPDATED value (refined at the previous level of this sweep). The root
     keeps its initial anchor (it is pinned at ``root_val``).
-    Used in the iterative-linearisation loop of Algorithm 3 (JMLR §7.1).
+
+    Returns:
+        A :class:`hyperiax.SweepFn` that writes ``(anchor, anchor_pa)`` at
+        every non-root node. Typical usage iterates with the BF up-sweep::
+
+            for _ in range(n_lin_iters):
+                tree = bf(tree, params=theta)
+                tree = refine(tree, params=theta)
     """
     @down(
         reads=("prec_v", "ptnl_v"),
