@@ -19,6 +19,9 @@ jobs:
   build:
     name: Sphinx build (strict)
     runs-on: ubuntu-latest
+    env:
+      # PR merge refs see upstream's legacy non-v tags but not the fork's v3 tag.
+      SETUPTOOLS_SCM_PRETEND_VERSION_FOR_HYPERIAX: "3.0.0"
 
     steps:
       - name: Checkout repository
