@@ -1,21 +1,25 @@
 name: Publish Package
 
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   pypi-publish:
-    name: Upload release to PyPI
+    name: Build and publish to PyPI
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/hyperiax
     permissions:
       id-token: write  # required for PyPI trusted publishing
+      contents: read
 
     steps:
     - name: Checkout repository
@@ -26,8 +30,19 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@v4
 
+    - name: Build sdist + wheel for main migration
+      if: github.event_name != 'release'
+      env:
+        # The migration merge publishes 3.0.0 before upstream has a matching
+        # v-prefixed release tag available to setuptools-scm.
+        SETUPTOOLS_SCM_PRETEND_VERSION_FOR_HYPERIAX: "3.0.0"
+      run: uv build
+
     - name: Build sdist + wheel
+      if: github.event_name == 'release'
       run: uv build
 
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        skip-existing: true

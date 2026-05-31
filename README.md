@@ -1,72 +1,103 @@
-# Hyperiax: Tree traversals using JAX
+# Hyperiax
+
 <p align="center">
- <img width="300", height="250" src="./docs/figures/hyperiax_logo.png">
+  <img width="300" height="250" src="./docs/figures/hyperiax_logo.png" alt="Hyperiax logo">
 </p>
 
-> **Note (May 2026):** the `v3` branch is a ground-up rewrite of the core API.
-> The published `pip install hyperiax` still points at the legacy 0.x release;
-> v3.0.0 is the upcoming first release of the new line.
+Hyperiax is a pure-JAX library for message passing on rooted trees. It provides
+immutable tree data structures, typed per-node arrays, and decorator-based
+sweeps that compose with `jax.jit`, `jax.vmap`, and `jax.lax.scan`.
 
-## Introduction
+Hyperiax is designed for phylogenetic and tree-structured scientific computing,
+including Gaussian graphical models, phylogenetic means, and guided inference
+for diffusion processes on trees.
 
-_Hyperiax_ is a framework for tree traversal and computations on large-scale trees. Its primary purpose is to facilitate **efficient message passing** and **operation execution** on large trees. Hyperiax uses [JAX](https://jax.readthedocs.io/en/latest/index.html) for fast execution and automatic differentiation. _Hyperiax_ is currently developed and maintained by [CCEM, UCPH](https://www.ccem.dk/).
+## Installation
 
-Initially, _Hyperiax_ was designed for phylogenetic analysis of biological shape data, particularly statistical inference with continuous-time stochastic processes along tree edges. Its messaging primitives are general — applicable to Gaussian graphical models, phylogenetic mean computation, recursive shape matching, and similar tree-structured problems.
-
-## Installation (development, v3 branch)
-
-Python 3.11 or newer is required. Hyperiax v3 uses
-[`uv`](https://docs.astral.sh/uv/) to manage the Python environment —
-`pyproject.toml` is the single source of truth and the checked-in `uv.lock`
-pins a reproducible resolution.
+Hyperiax requires Python 3.11 or newer.
 
 ```bash
-# Install uv (macOS)
-brew install uv
-
-# Clone and enter the repo
-git clone git@github.com:ComputationalEvolutionaryMorphometry/hyperiax.git
-cd hyperiax
-git switch v3
-
-# Create the project venv: core CPU runtime + dev group (test + lint + docs).
-uv sync --group dev
-
-# Run tests
-uv run pytest
-
-# Enable pre-commit hooks (ruff lint + format, whitespace, yaml/toml checks)
-uv run pre-commit install
+pip install hyperiax
 ```
 
-The core runtime is **CPU JAX** (`jax`, `jaxlib`, `numpy`) — the cleanest
-install, works everywhere. For a CUDA 12 machine, add the single `gpu` extra,
-which layers the CUDA jaxlib plugin on top:
+The core package depends only on JAX, jaxlib, and NumPy. For accelerator-backed
+JAX installations, follow the official JAX installation instructions for your
+platform before or after installing Hyperiax.
 
-```bash
-uv sync --group dev --extra gpu
+## Quick Start
+
+```python
+import jax.numpy as jnp
+import hyperiax as hx
+
+topology = hx.symmetric_topology(depth=2, degree=2)
+tree = hx.Tree.empty(topology, {"value": (2,)})
+
+leaf_count = int(topology.is_leaf.sum())
+tree = tree.at[topology.is_leaf].set(value=jnp.ones((leaf_count, 2)))
+
+
+@hx.up(reads_children=("value",), writes=("value",))
+def average_children(node, children, params):
+    return {"value": children.value.mean(0)}
+
+
+result = average_children(tree)
+root_value = result.value[0]
 ```
 
-Plain `pip` works too, with `pyproject.toml` as the source of truth:
+Sweeps are ordinary `Tree -> Tree` functions. The `@hx.up` and `@hx.down`
+decorators declare which fields are read and written, so dispatch remains
+explicit and JAX-friendly.
 
-```bash
-pip install -e .            # core (CPU)
-pip install -e '.[gpu]'     # core + CUDA 12
-```
+## Architecture
 
-## Project layout (v3)
-
-```
+```text
 hyperiax/
-├── core/                 # L1 — Topology, Tree, sweep decorators (no external deps)
-├── io/                   # L2 — Newick I/O
-└── prebuilt/             # L2 — phylo_mean, BFFG (Gaussian/SDE), MCMC, SDE utilities
+├── core/      # Topology, Tree, Schema, views, sweep dispatch, builders
+├── utils/     # Pure-JAX ODE and SDE solvers
+└── prebuilt/  # Ready-to-use sweeps for BFFG and phylogenetic means
 ```
 
-## Contribution
+### Core
 
-Contributions, issues and feature requests are welcome — please open an issue or PR on GitHub.
+`hyperiax.core` contains the public primitives:
+
+- `Topology` for rooted tree structure.
+- `Tree` for immutable per-node JAX arrays.
+- `Schema` for field shape and dtype validation.
+- `@hx.up` and `@hx.down` for message-passing sweeps.
+- Newick helpers for importing and exporting rooted trees.
+
+### Utilities
+
+`hyperiax.utils` contains pure-JAX numerical helpers, including ODE and SDE
+solvers used by the prebuilt guided-inference routines.
+
+### Prebuilt Sweeps
+
+`hyperiax.prebuilt` contains focused implementations for common tree workflows:
+
+- `phylo_mean` for weighted phylogenetic means.
+- `bffg` for Backward Filtering Forward Guiding on discrete Gaussian and
+  continuous SDE edges.
+
+## Documentation
+
+Tutorials and API reference are available in the project documentation:
+
+- Quickstart and sweep-writing tutorials under `docs/source/notebooks/`.
+- Public API reference under `docs/source/api/`.
+
+## Reference
+
+The BFFG implementation follows:
+
+> van der Meulen, F. H. & Sommer, S. (2025). Backward Filtering Forward
+> Guiding. JMLR 26(281), 1-51. https://arxiv.org/abs/2505.18239
 
 ## Contact
 
-For questions related to the Hyperiax project, please contact [Stefan Sommer](mailto:sommer@di.ku.dk).
+Hyperiax is maintained by CCEM, University of Copenhagen. For technical
+questions, please open a GitHub issue or contact
+[Stefan Sommer](mailto:sommer@di.ku.dk).
