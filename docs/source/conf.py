@@ -2,7 +2,7 @@
 
 Builds with ``make -C docs html`` (locally) or ``sphinx-build -W docs/source
 docs/build/html``. Notebook outputs are rendered as-saved — install the
-``[notebooks]`` extra and re-run the .ipynb locally to refresh them.
+``[notebook]`` extra and re-run the .ipynb locally to refresh them.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ html_title = f"hyperiax {version}"
 html_static_path = ["_static"]
 html_theme_options = {
     "source_repository": "https://github.com/computationalevolutionarymorphometry/hyperiax",
-    "source_branch": "main",
+    "source_branch": "v3",
     "source_directory": "docs/source/",
     "footer_icons": [
         {

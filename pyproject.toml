@@ -29,6 +29,11 @@ dynamic = ["version"]
 gpu = [
     "jax[cuda12]>=0.4.30",
 ]
+notebook = [
+    "matplotlib>=3.8",
+    "ipykernel>=6.29",
+    "numpyro>=0.15",
+]
 numpyro = [
     "numpyro>=0.15",
 ]
@@ -71,8 +76,6 @@ dev = [
     # notebooks / examples
     "ipykernel>=6.29",
     "matplotlib>=3.8",
-    "joblib>=1.4",
-    "optax>=0.2",
 ]
 
 [tool.uv]

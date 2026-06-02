@@ -148,9 +148,9 @@ def up(
             ``None`` defaults to all schema fields at call time.
         writes: Fields written back per parent (canonical case).
         writes_children: Fields written per child (one row per outgoing
-            edge); requires an equal-degree topology. Use when an up
-            sweep also produces per-edge byproducts you want to cache on
-            each child (e.g. per-edge ODE-filter trajectories).
+            edge). Use when an up sweep also produces per-edge byproducts
+            you want to cache on each child (e.g. per-edge ODE-filter
+            trajectories).
 
     Example::
 

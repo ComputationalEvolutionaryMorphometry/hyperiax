@@ -3,7 +3,7 @@ Tutorials
 
 The tutorials walk through the core API and then through each prebuilt model.
 Notebook outputs are rendered as-saved — to re-run them yourself, install
-the ``notebooks`` extra and run the ``.ipynb`` files in
+the ``notebook`` extra and run the ``.ipynb`` files in
 ``docs/source/notebooks/``.
 
 .. toctree::

@@ -1000,3 +1000,20 @@ def continuous_refine_anchor() -> SweepFn:
         return {"anchor": anchor, "anchor_pa": parent.anchor}
 
     return _sweep
+
+
+def propagate_linearization(tree: Tree, params=None) -> Tree:
+    """Propagate continuous BFFG linearisation anchors top-down.
+
+    This is the public one-shot form of :func:`continuous_refine_anchor`.
+    It overwrites each non-root node's ``anchor`` with ``prec_v^-1 ptnl_v``
+    and caches the parent's just-refined anchor in ``anchor_pa``.
+
+    Args:
+        tree: Continuous BFFG tree after :func:`continuous_bf_sweep`.
+        params: Optional params object passed through to the underlying sweep.
+
+    Returns:
+        Tree with updated ``anchor`` and ``anchor_pa`` fields.
+    """
+    return continuous_refine_anchor()(tree, params=params)

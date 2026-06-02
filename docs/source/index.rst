@@ -26,11 +26,10 @@ What's in the box
 
 * **core**: :class:`~hyperiax.Topology`, :class:`~hyperiax.Tree`,
   :class:`~hyperiax.Schema`, the ``@up`` / ``@down`` sweep decorators, the
-  equal- / unequal-degree dispatch engine, and Newick read/write
+  unified segment-based dispatch engine, and Newick read/write
   (:func:`~hyperiax.from_newick` / :func:`~hyperiax.to_newick`).
-* **prebuilt**: BFFG for Gaussian and SDE transitions
-  (van der Meulen & Sommer 2025), Metropolis-Hastings on arbitrary pytrees,
-  LDDMM landmark dynamics, weighted phylo-mean.
+* **prebuilt**: BFFG for discrete Gaussian and continuous SDE transitions
+  (van der Meulen & Sommer 2025), plus weighted phylo-mean.
 
 Installation
 ------------
@@ -39,6 +38,7 @@ Installation
 
    pip install hyperiax                  # core, CPU JAX (jax + jaxlib + numpy)
    pip install 'hyperiax[gpu]'           # + CUDA 12 JAX
+   pip install 'hyperiax[notebook]'      # tutorial notebooks
 
 Contents
 --------
