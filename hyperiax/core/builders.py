@@ -18,7 +18,6 @@ from collections import deque
 from collections.abc import Mapping
 from pathlib import Path
 
-import jax.numpy as jnp
 import numpy as np
 
 from .schema import FieldSpec, Schema
@@ -72,10 +71,11 @@ def from_newick(
 ) -> Tree:
     """Read a Newick tree (literal or file path) into a hyperiax :class:`Tree`.
 
-    Branch lengths land on ``tree.data['edge_length']`` (shape ``()``,
-    ``float32``); the root edge length is whatever the Newick string reports
-    (usually 0). Node names ride on :attr:`Topology.names` (static metadata),
-    not in ``tree.data``.
+    Branch lengths land on ``tree.data['edge_length']`` (shape ``()``) with
+    the current default floating dtype unless ``schema`` overrides it; the
+    root edge length is whatever the Newick string reports (usually 0). Node
+    names ride on :attr:`Topology.names` (static metadata), not in
+    ``tree.data``.
 
     Args:
         source: a Newick literal (string ending in ``;``) or a path to a
@@ -84,8 +84,8 @@ def from_newick(
             zeros for the caller to fill in afterwards.
 
     Returns:
-        A Tree whose schema always includes ``edge_length`` (``()``,
-        float32) plus any extras requested.
+        A Tree whose schema always includes ``edge_length`` (``()``) plus any
+        extras requested.
     """
     root = _parse_newick(_read_newick_source(source))
     parents, names, edge_lengths = _bfs_arrays(root)
@@ -100,7 +100,7 @@ def from_newick(
             merged.update(schema)
     full_schema = Schema.from_dict(merged)
 
-    return Tree.empty(topo, full_schema).set(edge_length=jnp.asarray(edge_lengths))
+    return Tree.empty(topo, full_schema).set(edge_length=edge_lengths)
 
 
 def to_newick(tree: Tree) -> str:
@@ -255,14 +255,14 @@ def _bfs_arrays(root: _NewickNode) -> tuple[np.ndarray, tuple[str, ...], np.ndar
     return (
         np.asarray(parents, dtype=np.int32),
         tuple(names),
-        np.asarray(edge_lengths, dtype=np.float32),
+        np.asarray(edge_lengths),
     )
 
 
 def _format_length(x) -> str:
     """Format a branch length minimally (``1.0`` -> ``1``, ``0.5`` -> ``0.5``).
 
-    Matches the 6-significant-figure ``%g`` style so float32 round-off
-    (e.g. ``0.1`` -> ``0.10000000149``) collapses back to ``0.1``.
+    Matches the 6-significant-figure ``%g`` style, which also keeps common
+    round-off artifacts compact.
     """
     return format(float(x), "g")

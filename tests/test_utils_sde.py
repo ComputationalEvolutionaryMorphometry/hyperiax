@@ -8,6 +8,13 @@ import pytest
 from hyperiax.utils.sde import EulerMaruyama, Milstein, dot, dts, solve, solve_sde
 
 
+@pytest.fixture
+def restore_x64_config():
+    original = jax.config.jax_enable_x64
+    yield
+    jax.config.update("jax_enable_x64", original)
+
+
 def _ts(T, n_steps):
     return jnp.concatenate([jnp.zeros(1), jnp.cumsum(dts(T=T, n_steps=n_steps))])
 
@@ -105,6 +112,25 @@ def test_milstein_single_step_beats_em_on_geometric_bm():
     expected_mil = x0 + sigma * x0 * dW + 0.5 * sigma**2 * x0 * (dW**2 - dt)
     np.testing.assert_allclose(mil, expected_mil, atol=1e-6)
     assert abs(mil - exact) < abs(em - exact)
+
+
+def test_milstein_preserves_explicit_float32_when_x64_enabled(restore_x64_config):
+    jax.config.update("jax_enable_x64", True)
+    ts = jnp.array([0.0, 0.1], dtype=jnp.float32)
+    dWs = jnp.array([[0.0]], dtype=jnp.float32)
+    drift = lambda t, y, a: jnp.zeros_like(y)
+    diffusion = lambda t, y, a: jnp.eye(1, dtype=y.dtype)
+
+    ys = solve_sde(
+        drift,
+        diffusion,
+        jnp.array([1.0], dtype=jnp.float32),
+        ts,
+        dWs,
+        solver=Milstein(),
+    )
+
+    assert ys.dtype == np.dtype(jnp.float32)
 
 
 # ── jit / vmap composition ─────────────────────────────────────────

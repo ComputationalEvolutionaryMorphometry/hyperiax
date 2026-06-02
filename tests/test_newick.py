@@ -2,11 +2,19 @@
 
 from pathlib import Path
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from hyperiax import Topology, Tree, from_newick, to_newick
+
+
+@pytest.fixture
+def restore_x64_config():
+    original = jax.config.jax_enable_x64
+    yield
+    jax.config.update("jax_enable_x64", original)
 
 
 # ── basic round-trips ───────────────────────────────────────────────
@@ -40,6 +48,16 @@ def test_read_extracts_edge_lengths():
     tree = from_newick("(A:0.5,B:1.5);")
     # BFS: root, A, B → edge_lengths in same order, root edge=0
     np.testing.assert_allclose(tree["edge_length"], [0.0, 0.5, 1.5])
+
+
+def test_read_edge_length_dtype_tracks_jax_float_config(restore_x64_config):
+    jax.config.update("jax_enable_x64", True)
+    tree = from_newick("(A:0.1,B:0.2);")
+    assert tree["edge_length"].dtype == np.dtype(jnp.float64)
+
+    jax.config.update("jax_enable_x64", False)
+    tree = from_newick("(A:0.1,B:0.2);")
+    assert tree["edge_length"].dtype == np.dtype(jnp.float32)
 
 
 def test_read_extracts_node_names_into_topology():

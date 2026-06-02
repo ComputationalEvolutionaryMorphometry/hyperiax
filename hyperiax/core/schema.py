@@ -17,12 +17,22 @@ import jax.numpy as jnp
 import numpy as np
 
 
+def _default_float_dtype() -> np.dtype:
+    """Return JAX's current default floating dtype."""
+    return np.dtype(jnp.asarray(0.0).dtype)
+
+
 @dataclass(frozen=True)
 class FieldSpec:
     """Per-node trailing shape and dtype of a single Tree field."""
 
     shape: tuple[int, ...]
-    dtype: np.dtype = jnp.float32
+    dtype: object | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "shape", tuple(self.shape))
+        dtype = _default_float_dtype() if self.dtype is None else np.dtype(self.dtype)
+        object.__setattr__(self, "dtype", dtype)
 
     @staticmethod
     def _coerce(spec) -> FieldSpec:

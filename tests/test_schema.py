@@ -1,8 +1,18 @@
 """Schema / FieldSpec sanity tests."""
 
+import jax
+import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from hyperiax import FieldSpec, Schema
+
+
+@pytest.fixture
+def restore_x64_config():
+    original = jax.config.jax_enable_x64
+    yield
+    jax.config.update("jax_enable_x64", original)
 
 
 def test_fieldspec_coerce_from_tuple():
@@ -12,6 +22,20 @@ def test_fieldspec_coerce_from_tuple():
 
 def test_fieldspec_coerce_from_none_is_scalar():
     assert FieldSpec._coerce(None).shape == ()
+
+
+def test_fieldspec_default_dtype_tracks_jax_float_config(restore_x64_config):
+    jax.config.update("jax_enable_x64", True)
+    assert FieldSpec._coerce((2,)).dtype == np.dtype(jnp.float64)
+
+    jax.config.update("jax_enable_x64", False)
+    assert FieldSpec._coerce((2,)).dtype == np.dtype(jnp.float32)
+
+
+def test_fieldspec_explicit_dtype_overrides_jax_float_config(restore_x64_config):
+    jax.config.update("jax_enable_x64", True)
+    spec = FieldSpec(shape=(2,), dtype=jnp.float32)
+    assert spec.dtype == np.dtype(jnp.float32)
 
 
 def test_fieldspec_coerce_rejects_garbage():

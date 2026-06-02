@@ -117,10 +117,10 @@ def continuous_schema(d: int, n_steps: int) -> dict[str, tuple[int, ...]]:
     """
     return {
         "edge_len": (),
-        "vals": (n_steps+1, d),
+        "vals": (n_steps + 1, d),
         "zs": (n_steps, d),
-        "ptnls": (n_steps+1, d),
-        "precs": (n_steps+1, d, d),
+        "ptnls": (n_steps + 1, d),
+        "precs": (n_steps + 1, d, d),
         "ptnl_v": (d,),
         "prec_v": (d, d),
         "anchor": (d,),
@@ -145,12 +145,12 @@ def _canonical_leaf_messages(
     message into an actual log-density at ``x``.
     """
     n_leaves = leaf_obs.shape[0]
-    prec = jnp.eye(d) / obs_var
+    obs_var = jnp.asarray(obs_var, dtype=leaf_obs.dtype)
+    prec = jnp.eye(d, dtype=leaf_obs.dtype) / obs_var
     prec = jnp.broadcast_to(prec, (n_leaves, d, d))
     ptnl = leaf_obs / obs_var
     log_norm = (
-        -0.5 * d * jnp.log(2.0 * jnp.pi * obs_var)
-        - 0.5 * jnp.sum(leaf_obs ** 2, axis=-1) / obs_var
+        -0.5 * d * jnp.log(2.0 * jnp.pi * obs_var) - 0.5 * jnp.sum(leaf_obs**2, axis=-1) / obs_var
     )  # (n_leaves,)
     return {"prec": prec, "ptnl": ptnl, "log_norm": log_norm}
 
@@ -203,7 +203,9 @@ def init_discrete_tree(
     # - Inner/root: anchor = anchor_init (defaults to root_val or zeros).
     if "anchor" in tree.schema:
         if anchor_init is None:
-            anchor_init = jnp.zeros(d) if root_val is None else jnp.asarray(root_val)
+            anchor_init = (
+                jnp.zeros(d, dtype=leaf_obs.dtype) if root_val is None else jnp.asarray(root_val)
+            )
         anchor_init = jnp.asarray(anchor_init)
         tree = tree.set(anchor=jnp.broadcast_to(anchor_init, (tree.topology.size, d)))
         tree = tree.at[tree.topology.is_leaf].set(anchor=leaf_obs)
@@ -256,7 +258,7 @@ def init_continuous_tree(
         root_val = jnp.asarray(root_val)
         if "vals" in tree.schema:
             tree = tree.at[tree.topology.is_root].set(
-                vals=jnp.broadcast_to(root_val, (n_steps+1, d))
+                vals=jnp.broadcast_to(root_val, (n_steps + 1, d))
             )
         else:
             raise ValueError("Schema must declare 'vals' field to set root_val.")
@@ -269,7 +271,9 @@ def init_continuous_tree(
     #   the parent's just-refined anchor.
     if "anchor" in tree.schema:
         if anchor_init is None:
-            anchor_init = jnp.zeros(d) if root_val is None else jnp.asarray(root_val)
+            anchor_init = (
+                jnp.zeros(d, dtype=leaf_obs.dtype) if root_val is None else jnp.asarray(root_val)
+            )
         anchor_init = jnp.asarray(anchor_init)
         tree = tree.set(anchor=jnp.broadcast_to(anchor_init, (tree.topology.size, d)))
         tree = tree.at[tree.topology.is_leaf].set(anchor=leaf_obs)
@@ -279,8 +283,14 @@ def init_continuous_tree(
 
 
 def _discrete_backward_filtering(
-    prec, ptnl, log_norm, anchor,
-    prxy_scale_fn, prxy_shift_fn, prxy_covar_fn, params,
+    prec,
+    ptnl,
+    log_norm,
+    anchor,
+    prxy_scale_fn,
+    prxy_shift_fn,
+    prxy_covar_fn,
+    params,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
     """One BF edge step. Returns ``(prec_msg, ptnl_msg, log_norm_msg)`` such
     that the parent's canonical message is the sum of these contributions
@@ -302,39 +312,52 @@ def _discrete_backward_filtering(
     B, beta = prxy_scale_fn(anchor, params), prxy_shift_fn(anchor, params)
     Q = prxy_covar_fn(anchor, params)
     d = prec.shape[-1]
-    phi_inv = jnp.eye(d) + prec @ Q                       # I + HQ
-    Cinv = jnp.linalg.solve(phi_inv, prec)                # phi_inv⁻¹ H = C⁻¹
+    phi_inv = jnp.eye(d, dtype=prec.dtype) + prec @ Q  # I + HQ
+    Cinv = jnp.linalg.solve(phi_inv, prec)  # phi_inv⁻¹ H = C⁻¹
     prec_msg = B.T @ Cinv @ B
     ptnl_msg = B.T @ solve(phi_inv, ptnl - prec @ beta)
 
     # c-update:  Δc = -½ log det(phi_inv) + ½ F' Q phi_inv⁻¹ F
     #                 + F' Q phi_inv⁻¹ Q⁻¹ β - ½ β' phi_inv⁻¹ H β.
     sign, logdet_phi = jnp.linalg.slogdet(phi_inv)
-    Q_phi_inv = jnp.linalg.solve(phi_inv.T, Q.T).T        # Q · phi_inv⁻¹
+    Q_phi_inv = jnp.linalg.solve(phi_inv.T, Q.T).T  # Q · phi_inv⁻¹
     term_F = 0.5 * ptnl @ Q_phi_inv @ ptnl
     term_F_beta = ptnl @ Q_phi_inv @ jnp.linalg.solve(Q, beta)
     term_beta = -0.5 * beta @ jnp.linalg.solve(phi_inv, prec @ beta)
     log_norm_msg = log_norm - 0.5 * logdet_phi + term_F + term_F_beta + term_beta
     return prec_msg, ptnl_msg, log_norm_msg
 
-def _discrete_forward_guiding(x_pa, z, prec, ptnl, anchor, *,
-                              mean_fn, covar_fn,
-                              prxy_scale_fn, prxy_shift_fn, prxy_covar_fn,
-                              params) -> tuple[jax.Array, jax.Array]:
+
+def _discrete_forward_guiding(
+    x_pa,
+    z,
+    prec,
+    ptnl,
+    anchor,
+    *,
+    mean_fn,
+    covar_fn,
+    prxy_scale_fn,
+    prxy_shift_fn,
+    prxy_covar_fn,
+    params,
+) -> tuple[jax.Array, jax.Array]:
     d = prec.shape[-1]
     mu = mean_fn(x_pa, params)
     Q_true = covar_fn(x_pa, params)
 
     # Sample under P°: Nᶜᵃⁿ(F + Q⁻¹μ, H + Q⁻¹)  (Theorem 14).
-    inv = jnp.linalg.solve(jnp.eye(d) + Q_true @ prec, Q_true)   # (H + Q⁻¹)⁻¹
+    inv = jnp.linalg.solve(jnp.eye(d, dtype=prec.dtype) + Q_true @ prec, Q_true)  # (H + Q⁻¹)⁻¹
     m_ch = dot(inv, ptnl + solve(Q_true, mu))
     x_ch = m_ch + dot(cholesky(inv, lower=True, check_finite=False), z)
 
     # Weight w = (Pg)/(P̃g) = φ(H⁻¹F; μ, Q+H⁻¹) / φ(H⁻¹F; Φx+β, Q̃+H⁻¹).
     # Auxiliary is evaluated at the per-edge linearisation point `anchor`.
-    H_inv = cho_solve((cholesky(prec, lower=True, check_finite=False), True),
-                      jnp.eye(d))
-    m_star = solve(prec, ptnl)                                   # H⁻¹F
+    H_inv = cho_solve(
+        (cholesky(prec, lower=True, check_finite=False), True),
+        jnp.eye(d, dtype=prec.dtype),
+    )
+    m_star = solve(prec, ptnl)  # H⁻¹F
     B, beta = prxy_scale_fn(anchor, params), prxy_shift_fn(anchor, params)
     mu_prxy = B @ x_pa + beta
 
@@ -346,8 +369,7 @@ def _discrete_forward_guiding(x_pa, z, prec, ptnl, anchor, *,
     y_prxy = solve_triangular(L_prxy, m_star - mu_prxy, lower=True)
     logdet_true = 2.0 * jnp.sum(jnp.log(jnp.diag(L_true)))
     logdet_prxy = 2.0 * jnp.sum(jnp.log(jnp.diag(L_prxy)))
-    log_corr = -0.5 * (logdet_true - logdet_prxy) \
-                - 0.5 * (jnp.sum(y_true**2) - jnp.sum(y_prxy**2))
+    log_corr = -0.5 * (logdet_true - logdet_prxy) - 0.5 * (jnp.sum(y_true**2) - jnp.sum(y_prxy**2))
     return x_ch, log_corr
 
 
@@ -376,6 +398,7 @@ def discrete_bf_sweep(prxy_scale_fn, prxy_shift_fn, prxy_covar_fn) -> SweepFn:
         for nonlinear models, iterate this sweep with
         :func:`discrete_refine_anchor` (Algorithm 3 §7.1).
     """
+
     @up(
         reads_children=("prec", "ptnl", "log_norm", "anchor"),
         writes=("prec", "ptnl", "log_norm"),
@@ -384,8 +407,14 @@ def discrete_bf_sweep(prxy_scale_fn, prxy_shift_fn, prxy_covar_fn) -> SweepFn:
 
         def per_child(child):
             prec_msg, ptnl_msg, log_norm_msg = _discrete_backward_filtering(
-                child.prec, child.ptnl, child.log_norm, child.anchor,
-                prxy_scale_fn, prxy_shift_fn, prxy_covar_fn, params,
+                child.prec,
+                child.ptnl,
+                child.log_norm,
+                child.anchor,
+                prxy_scale_fn,
+                prxy_shift_fn,
+                prxy_covar_fn,
+                params,
             )
             return {"prec": prec_msg, "ptnl": ptnl_msg, "log_norm": log_norm_msg}
 
@@ -398,6 +427,7 @@ def discrete_bf_sweep(prxy_scale_fn, prxy_shift_fn, prxy_covar_fn) -> SweepFn:
         }
 
     return _sweep
+
 
 def discrete_forward_sweep(mean_fn, covar_fn) -> SweepFn:
     """Build the unconditional forward-sampling down-sweep.
@@ -420,6 +450,7 @@ def discrete_forward_sweep(mean_fn, covar_fn) -> SweepFn:
         The root's ``val`` must be set by the caller (typically via
         :func:`init_discrete_tree`'s ``root_val``).
     """
+
     @down(
         reads_parent=("val",),
         reads=("z",),
@@ -428,11 +459,12 @@ def discrete_forward_sweep(mean_fn, covar_fn) -> SweepFn:
     def _sweep(node, parent, params):
         covar = covar_fn(parent.val, params)
         return {
-            "val": mean_fn(parent.val, params) \
-                + dot(cholesky(covar, lower=True, check_finite=False), node.z)
+            "val": mean_fn(parent.val, params)
+            + dot(cholesky(covar, lower=True, check_finite=False), node.z)
         }
 
     return _sweep
+
 
 def discrete_fg_sweep(mean_fn, covar_fn, prxy_scale_fn, prxy_shift_fn, prxy_covar_fn) -> SweepFn:
     """Build the discrete-edge forward-guided down-sweep (Theorem 14 §6.1).
@@ -462,6 +494,7 @@ def discrete_fg_sweep(mean_fn, covar_fn, prxy_scale_fn, prxy_shift_fn, prxy_cova
         non-root node. Run :func:`discrete_bf_sweep` first to populate the
         canonical messages.
     """
+
     @down(
         reads_parent=("val",),
         reads=("z", "prec", "ptnl", "anchor"),
@@ -469,10 +502,17 @@ def discrete_fg_sweep(mean_fn, covar_fn, prxy_scale_fn, prxy_shift_fn, prxy_cova
     )
     def _sweep(node, parent, params):
         x_ch, log_corr = _discrete_forward_guiding(
-            parent.val, node.z, node.prec, node.ptnl, node.anchor,
-            mean_fn=mean_fn, covar_fn=covar_fn,
-            prxy_scale_fn=prxy_scale_fn, prxy_shift_fn=prxy_shift_fn,
-            prxy_covar_fn=prxy_covar_fn, params=params,
+            parent.val,
+            node.z,
+            node.prec,
+            node.ptnl,
+            node.anchor,
+            mean_fn=mean_fn,
+            covar_fn=covar_fn,
+            prxy_scale_fn=prxy_scale_fn,
+            prxy_shift_fn=prxy_shift_fn,
+            prxy_covar_fn=prxy_covar_fn,
+            params=params,
         )
         return {"val": x_ch, "log_corr": log_corr}
 
@@ -497,6 +537,7 @@ def discrete_refine_anchor() -> SweepFn:
                 tree = bf(tree, params=theta)
                 tree = refine(tree, params=theta)
     """
+
     @down(reads=("prec", "ptnl"), writes=("anchor",))
     def _sweep(node, parent, params):
         anchor = jnp.linalg.solve(node.prec, node.ptnl)
@@ -504,10 +545,20 @@ def discrete_refine_anchor() -> SweepFn:
 
     return _sweep
 
-def _continuous_backward_filtering(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch, *,
-                                   prxy_diffusion_fn,
-                                   prxy_scale_fn, prxy_shift_fn,
-                                   params) -> tuple[jax.Array, jax.Array, jax.Array]:
+
+def _continuous_backward_filtering(
+    ts,
+    prec,
+    ptnl,
+    log_norm,
+    anchor_pa,
+    anchor_ch,
+    *,
+    prxy_diffusion_fn,
+    prxy_scale_fn,
+    prxy_shift_fn,
+    params,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
     """Backward-filter one edge. Returns ``(precs, ptnls, log_norm_at_pa)``
     where ``precs`` and ``ptnls`` are the per-step canonical trajectories
     and ``log_norm_at_pa`` is the canonical-message log-norm propagated to
@@ -523,21 +574,46 @@ def _continuous_backward_filtering(ts, prec, ptnl, log_norm, anchor_pa, anchor_c
     ``σ̃(anchor_pa)σ̃ᵀ`` and ``σ̃(anchor_ch)σ̃ᵀ``.
     """
     if prxy_scale_fn is None and prxy_shift_fn is None:
-        return _continuous_bf_anlt(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch,
-            prxy_scale_fn=None, prxy_shift_fn=None,
+        return _continuous_bf_anlt(
+            ts,
+            prec,
+            ptnl,
+            log_norm,
+            anchor_pa,
+            anchor_ch,
+            prxy_scale_fn=None,
+            prxy_shift_fn=None,
             prxy_diffusion_fn=prxy_diffusion_fn,
-            params=params
+            params=params,
         )
     else:
-        return _continuous_bf_ode(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch,
-            prxy_scale_fn=prxy_scale_fn, prxy_shift_fn=prxy_shift_fn,
+        return _continuous_bf_ode(
+            ts,
+            prec,
+            ptnl,
+            log_norm,
+            anchor_pa,
+            anchor_ch,
+            prxy_scale_fn=prxy_scale_fn,
+            prxy_shift_fn=prxy_shift_fn,
             prxy_diffusion_fn=prxy_diffusion_fn,
-            params=params
+            params=params,
         )
 
-def _continuous_bf_anlt(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch, *,
-                        prxy_scale_fn, prxy_shift_fn,
-                        prxy_diffusion_fn, params):
+
+def _continuous_bf_anlt(
+    ts,
+    prec,
+    ptnl,
+    log_norm,
+    anchor_pa,
+    anchor_ch,
+    *,
+    prxy_scale_fn,
+    prxy_shift_fn,
+    prxy_diffusion_fn,
+    params,
+):
     # B = β = 0: driftless linear auxiliary with linearly-interpolated σ̃.
     # ã(t) = (t/T) ã_ch + (1 - t/T) ã_pa, where ã_x = σ̃(x) σ̃(x)ᵀ.
     # Then Φ̃⁻¹(t) = I + H_T · ∫_t^T ã(s) ds is computed analytically.
@@ -559,16 +635,17 @@ def _continuous_bf_anlt(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch, *,
         #   c_pa = ∫_t^T (1 - s/T) ds = (T - t)² / (2T)
         c_ch = -(t**2 - t1**2) / (2.0 * t1)
         c_pa = ((t1 - t) ** 2) / (2.0 * t1)
-        phi_inv = jnp.eye(d) + c_ch * H_a_ch + c_pa * H_a_pa
+        phi_inv = jnp.eye(d, dtype=prec.dtype) + c_ch * H_a_ch + c_pa * H_a_pa
         prec_t = jnp.linalg.solve(phi_inv, prec)
         ptnl_t = solve(phi_inv, ptnl)
         return prec_t, ptnl_t
+
     precs, ptnls = jax.vmap(per_t)(ts)
 
     # log-norm at the parent end (t = ts[0]).  Effective covariance over the
     # whole edge under linear ã interpolation is (T/2)(ã_pa + ã_ch).
     covar_eff = 0.5 * t1 * (a_pa + a_ch)
-    phi_inv_full = jnp.eye(d) + prec @ covar_eff           # I + HQ
+    phi_inv_full = jnp.eye(d, dtype=prec.dtype) + prec @ covar_eff  # I + HQ
     _sign, logdet_full = jnp.linalg.slogdet(phi_inv_full)
     # Quadratic term ½ Fᵀ M⁻¹ F with M = H + Q⁻¹, and M⁻¹ = Q (I + HQ)⁻¹.
     # The factor ordering matters: (I+HQ)⁻¹Q is *not* symmetric and only
@@ -581,9 +658,19 @@ def _continuous_bf_anlt(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch, *,
     return precs, ptnls, log_norm_at_pa
 
 
-def _continuous_bf_ode(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch, *,
-                       prxy_scale_fn, prxy_shift_fn,
-                       prxy_diffusion_fn, params):
+def _continuous_bf_ode(
+    ts,
+    prec,
+    ptnl,
+    log_norm,
+    anchor_pa,
+    anchor_ch,
+    *,
+    prxy_scale_fn,
+    prxy_shift_fn,
+    prxy_diffusion_fn,
+    params,
+):
     t1 = ts[-1]
     d = prec.shape[-1]
 
@@ -593,8 +680,8 @@ def _continuous_bf_ode(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch, *,
 
     def vector_field(tau, y, args):
         # Recover (H, F, c) from the packed state.
-        Ht = y[:d*d].reshape((d, d))
-        Ft = y[d*d:d*d+d]
+        Ht = y[: d * d].reshape((d, d))
+        Ft = y[d * d : d * d + d]
         # ct = y[d*d+d]  # not used in the RHS, just propagated
         t = t1 - tau  # integrate backward in time
         anchor_t = anchor_at(t)
@@ -610,22 +697,32 @@ def _continuous_bf_ode(ts, prec, ptnl, log_norm, anchor_pa, anchor_ch, *,
         #   dc/dt = -β'F + ½ tr(aH) - ½ F'aF.
         dc = -betat @ Ft + 0.5 * jnp.trace(at @ Ht) - 0.5 * Ft @ at @ Ft
         # Integrate in τ = T - t, so dy/dτ = -dy/dt.
-        return -jnp.concatenate([dH.flatten(), dF.flatten(), jnp.array([dc])])
+        return -jnp.concatenate([dH.flatten(), dF.flatten(), jnp.asarray(dc).reshape(1)])
 
-    y0 = jnp.concatenate([prec.flatten(), ptnl.flatten(), jnp.array([log_norm])])
+    y0 = jnp.concatenate([prec.flatten(), ptnl.flatten(), jnp.asarray(log_norm).reshape(1)])
     sol = solve_ode(vector_field, y0, ts, solver=RK4(), args=params)
     sol = sol[::-1]
-    precs = sol[:, :d*d].reshape((-1, d, d))
-    ptnls = sol[:, d*d:d*d+d].reshape((-1, d))
-    log_norms = sol[:, d*d+d]
+    precs = sol[:, : d * d].reshape((-1, d, d))
+    ptnls = sol[:, d * d : d * d + d].reshape((-1, d))
+    log_norms = sol[:, d * d + d]
     return precs, ptnls, log_norms[0]  # parent end (after reversal)
 
 
-def _continuous_forward_guiding(x_pa, ts, dws, precs, ptnls,
-                                anchor_pa, anchor_ch,
-                                drift_fn, diffusion_fn,
-                                prxy_scale_fn, prxy_shift_fn,
-                                prxy_diffusion_fn, params) -> tuple[jax.Array, jax.Array]:
+def _continuous_forward_guiding(
+    x_pa,
+    ts,
+    dws,
+    precs,
+    ptnls,
+    anchor_pa,
+    anchor_ch,
+    drift_fn,
+    diffusion_fn,
+    prxy_scale_fn,
+    prxy_shift_fn,
+    prxy_diffusion_fn,
+    params,
+) -> tuple[jax.Array, jax.Array]:
     # Auxiliary's σ̃ varies linearly between anchor_pa (t=0) and anchor_ch (t=T)
     # to match the BF's interpolated ã. We pre-compute the endpoint ã's once;
     # each step reads ã(t_i) by linear lerp — same machinery the BF used.
@@ -644,8 +741,7 @@ def _continuous_forward_guiding(x_pa, ts, dws, precs, ptnls,
         prxy_drift_fn = lambda t, x, params: jnp.zeros_like(x)
     else:
         prxy_drift_fn = lambda t, x, params: (
-            prxy_shift_fn(t, anchor_at(t), params)
-            + prxy_scale_fn(t, anchor_at(t), params) @ x
+            prxy_shift_fn(t, anchor_at(t), params) + prxy_scale_fn(t, anchor_at(t), params) @ x
         )
 
     def bridge_step_body(carry, val):
@@ -663,18 +759,20 @@ def _continuous_forward_guiding(x_pa, ts, dws, precs, ptnls,
 
         # log w increment = (L - L̃)g / g   (Theorem 23 eq 32, Remark 24):
         #   (b - b̃)·r - ½ tr((a - ã) H) + ½ r'(a - ã) r.
-        covar_diff = a_true - a_prxy_t                   # a - ã (interpolated)
-        drift_diff = f_true - f_prxy                     # b - b̃
-        log_corr_next = log_corr + (
-            jnp.dot(drift_diff, r)
-            - 0.5 * jnp.sum(covar_diff * Ht)
-            + 0.5 * (r @ covar_diff @ r)
-        ) * dt
+        covar_diff = a_true - a_prxy_t  # a - ã (interpolated)
+        drift_diff = f_true - f_prxy  # b - b̃
+        log_corr_next = (
+            log_corr
+            + (jnp.dot(drift_diff, r) - 0.5 * jnp.sum(covar_diff * Ht) + 0.5 * (r @ covar_diff @ r))
+            * dt
+        )
         return (i + 1, x_next, log_corr_next), x
 
     dts = jnp.diff(ts)
-    (_, x_ch, log_corr), xs = jax.lax.scan(bridge_step_body, (0, x_pa, 0.0), (dts, dws))
+    log_corr0 = jnp.zeros((), dtype=x_pa.dtype)
+    (_, x_ch, log_corr), xs = jax.lax.scan(bridge_step_body, (0, x_pa, log_corr0), (dts, dws))
     return jnp.vstack((xs, x_ch)), log_corr
+
 
 def continuous_bf_sweep(n_steps, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn) -> SweepFn:
     """Build the continuous-edge backward-filtering up-sweep (Theorem 23 §7.1).
@@ -705,6 +803,7 @@ def continuous_bf_sweep(n_steps, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn
         at every non-leaf node and the full ``(precs, ptnls)`` trajectories
         at every non-root node.
     """
+
     @up(
         reads_children=("edge_len", "prec_v", "ptnl_v", "log_norm", "anchor", "anchor_pa"),
         writes=("prec_v", "ptnl_v", "log_norm"),
@@ -713,15 +812,20 @@ def continuous_bf_sweep(n_steps, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn
     def _sweep(node, children, params):
 
         def per_child(child):
-            ts = jnp.linspace(0.0, child.edge_len, n_steps+1)
+            ts = jnp.linspace(0.0, child.edge_len, n_steps + 1, dtype=child.edge_len.dtype)
             # Two-anchor linearisation along each edge:
             #   anchor_pa = child.anchor_pa (parent end, t = 0)
             #   anchor_ch = child.anchor    (child end,  t = T)
             precs, ptnls, log_norm_at_pa = _continuous_backward_filtering(
-                ts, child.prec_v, child.ptnl_v, child.log_norm,
-                child.anchor_pa, child.anchor,
+                ts,
+                child.prec_v,
+                child.ptnl_v,
+                child.log_norm,
+                child.anchor_pa,
+                child.anchor,
                 prxy_diffusion_fn=prxy_diffusion_fn,
-                prxy_scale_fn=prxy_scale_fn, prxy_shift_fn=prxy_shift_fn,
+                prxy_scale_fn=prxy_scale_fn,
+                prxy_shift_fn=prxy_shift_fn,
                 params=params,
             )
             # Return the full trajectory (cached on the child edge for forward
@@ -743,14 +847,15 @@ def continuous_bf_sweep(n_steps, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn
         # log_norm) all sum over children. The result is the terminal/initial
         # condition for this node's own edge, one level up.
         return {
-            "precs": msgs.precs,                # (n_steps+1, d, d) per child -> children
-            "ptnls": msgs.ptnls,                # (n_steps+1, d)    per child -> children
-            "prec_v": msgs.m_prec.sum(0),       # (d, d)                      -> this node
-            "ptnl_v": msgs.m_ptnl.sum(0),       # (d,)
-            "log_norm": msgs.m_log_norm.sum(0), # ()
+            "precs": msgs.precs,  # (n_steps+1, d, d) per child -> children
+            "ptnls": msgs.ptnls,  # (n_steps+1, d)    per child -> children
+            "prec_v": msgs.m_prec.sum(0),  # (d, d)                      -> this node
+            "ptnl_v": msgs.m_ptnl.sum(0),  # (d,)
+            "log_norm": msgs.m_log_norm.sum(0),  # ()
         }
 
     return _sweep
+
 
 def continuous_forward_sweep(n_steps, drift_fn, diffusion_fn) -> SweepFn:
     """Build the unconditional SDE forward-sampling down-sweep.
@@ -772,13 +877,14 @@ def continuous_forward_sweep(n_steps, drift_fn, diffusion_fn) -> SweepFn:
         to ``vals`` at every non-root node. The root's ``vals`` must be set by
         the caller (typically via :func:`init_continuous_tree`'s ``root_val``).
     """
+
     @down(
         reads_parent=("vals",),
         reads=("zs", "edge_len"),
         writes=("vals",),
     )
     def _sweep(node, parent, params):
-        ts = jnp.linspace(0, node.edge_len, n_steps+1)
+        ts = jnp.linspace(0, node.edge_len, n_steps + 1, dtype=node.edge_len.dtype)
         dws = jnp.sqrt(jnp.diff(ts))[:, None] * node.zs
         x0 = parent.vals[-1]
         ys = solve_sde(drift_fn, diffusion_fn, x0, ts, dws, solver=EulerMaruyama(), args=params)
@@ -786,7 +892,10 @@ def continuous_forward_sweep(n_steps, drift_fn, diffusion_fn) -> SweepFn:
 
     return _sweep
 
-def continuous_fg_sweep(n_steps, drift_fn, diffusion_fn, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn) -> SweepFn:
+
+def continuous_fg_sweep(
+    n_steps, drift_fn, diffusion_fn, prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn
+) -> SweepFn:
     """Build the continuous-edge forward-guided down-sweep (Theorem 23 §7.1).
 
     For each non-root node, integrates the guided SDE (eq 31)
@@ -823,22 +932,34 @@ def continuous_fg_sweep(n_steps, drift_fn, diffusion_fn, prxy_scale_fn, prxy_shi
         A :class:`hyperiax.SweepFn` that writes ``(vals, log_corr)`` at every
         non-root node. Run :func:`continuous_bf_sweep` first.
     """
+
     @down(
         reads_parent=("vals",),
         reads=("zs", "edge_len", "precs", "ptnls", "anchor", "anchor_pa"),
-        writes=("vals", "log_corr",),
+        writes=(
+            "vals",
+            "log_corr",
+        ),
     )
     def _sweep(node, parent, params):
-        ts = jnp.linspace(0, node.edge_len, n_steps+1)
+        ts = jnp.linspace(0, node.edge_len, n_steps + 1, dtype=node.edge_len.dtype)
         dws = jnp.sqrt(jnp.diff(ts))[:, None] * node.zs
         # Two-anchor linearisation: node.anchor_pa at edge start (t=0) and
         # node.anchor at edge end (t=T) — matches what the BF sweep used.
         xs, log_corr = _continuous_forward_guiding(
-            parent.vals[-1], ts, dws, node.precs, node.ptnls,
-            node.anchor_pa, node.anchor,
-            drift_fn, diffusion_fn,
-            prxy_scale_fn, prxy_shift_fn, prxy_diffusion_fn,
-            params
+            parent.vals[-1],
+            ts,
+            dws,
+            node.precs,
+            node.ptnls,
+            node.anchor_pa,
+            node.anchor,
+            drift_fn,
+            diffusion_fn,
+            prxy_scale_fn,
+            prxy_shift_fn,
+            prxy_diffusion_fn,
+            params,
         )
         return {"vals": xs, "log_corr": log_corr}
 
@@ -868,6 +989,7 @@ def continuous_refine_anchor() -> SweepFn:
                 tree = bf(tree, params=theta)
                 tree = refine(tree, params=theta)
     """
+
     @down(
         reads=("prec_v", "ptnl_v"),
         reads_parent=("anchor",),

@@ -72,7 +72,7 @@ class Milstein:
         G = diffusion(t, y, args)  # (state, noise)
         J = jax.jacfwd(lambda yy: diffusion(t, yy, args))(y)  # (state, noise, state)
         # M[j,k] = dW_j dW_k − δ_jk dt
-        M = jnp.outer(dW, dW) - dt * jnp.eye(dW.shape[0])
+        M = jnp.outer(dW, dW) - dt * jnp.eye(dW.shape[0], dtype=dW.dtype)
         # mil_i = ½ Σ_{j,k,m} G[m,j] J[i,k,m] M[j,k]
         mil = 0.5 * jnp.einsum("mj,ikm,jk->i", G, J, M)
         return y + drift(t, y, args) * dt + G @ dW + mil

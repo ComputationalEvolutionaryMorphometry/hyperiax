@@ -2,9 +2,10 @@
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
-from hyperiax import MissingField, SchemaMismatch, Topology, Tree
+from hyperiax import FieldSpec, MissingField, SchemaMismatch, Topology, Tree
 
 
 @pytest.fixture
@@ -12,11 +13,34 @@ def topo():
     return Topology.from_parents([0, 0, 0, 1, 1, 2, 2])
 
 
+@pytest.fixture
+def restore_x64_config():
+    original = jax.config.jax_enable_x64
+    yield
+    jax.config.update("jax_enable_x64", original)
+
+
 # ── construction ──────────────────────────────────────────────────────
 def test_empty_allocates_zeros(topo):
     tree = Tree.empty(topo, {"value": (2,)})
     assert tree["value"].shape == (7, 2)
     assert jnp.all(tree["value"] == 0)
+
+
+def test_empty_default_dtype_tracks_jax_float_config(topo, restore_x64_config):
+    jax.config.update("jax_enable_x64", True)
+    tree = Tree.empty(topo, {"value": (2,)})
+    assert tree["value"].dtype == np.dtype(jnp.float64)
+
+    jax.config.update("jax_enable_x64", False)
+    tree = Tree.empty(topo, {"value": (2,)})
+    assert tree["value"].dtype == np.dtype(jnp.float32)
+
+
+def test_empty_explicit_dtype_overrides_jax_float_config(topo, restore_x64_config):
+    jax.config.update("jax_enable_x64", True)
+    tree = Tree.empty(topo, {"value": FieldSpec((2,), dtype=jnp.float32)})
+    assert tree["value"].dtype == np.dtype(jnp.float32)
 
 
 def test_from_data_infers_schema(topo):
