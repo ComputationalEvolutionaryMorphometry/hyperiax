@@ -1,49 +1,63 @@
-Welcome to Hyperiax's documentation!
-===================================
+hyperiax — JAX tree traversals
+==============================
 
-**Hyperiax** is a framework for tree traversal and computations on large-scale tree. Its primary purpose is to facilitate efficient message passing and operation execution on large trees. Hyperiax uses `JAX <https://jax.readthedocs.io/en/latest/index.html>`_ for fast execution and automatic differentiation. Hyperiax is developed and maintained by `CCEM, UCPH <https://www.ccem.dk/>`_.
+**hyperiax** is a small, pure-JAX library for message passing on phylogenetic
+/ rooted trees. Trees are immutable JAX pytrees; sweeps are decorator-style
+``Tree -> Tree`` transforms that compose cleanly under ``@jax.jit`` and
+``jax.lax.scan``.
 
-Initially, Hyperiax was designed specifically for phylogenetic analysis of biological shape data, particularly enabling statistical inference with continuous time stochastic processes along the edges of the trees. For this purpose, is integrated with `JAXGeometry <https://bitbucket.org/stefansommer/jaxgeometry/src/main/>`_, a computational differential geometry toolbox implemented in JAX. However, Hyperiax's *messaging system* and *operations* are general, which means that they can be easily adapted for use in other contexts. With minor modifications, Hyperiax can be used for any application where fast tree-level computations are necessary. Included examples cover such cases with inference in Gaussian graphical models, phylogenetic mean computation, and recursive shape matching in binary trees.
+.. code-block:: python
 
-.. _installation:
+   import jax, jax.numpy as jnp
+   import hyperiax as hx
 
-------------
+   topo = hx.symmetric_topology(depth=3, degree=2)
+   tree = hx.Tree.empty(topo, {"value": (2,)})
+   tree = tree.at[topo.is_leaf].set(value=jnp.ones((8, 2)))
+
+   @hx.up(reads_children=("value",), writes=("value",))
+   def avg(node, children, params):
+       return {"value": children.value.mean(0)}
+
+   root_value = avg(tree)["value"][0]
+
+What's in the box
+-----------------
+
+* **core**: :class:`~hyperiax.Topology`, :class:`~hyperiax.Tree`,
+  :class:`~hyperiax.Schema`, the ``@up`` / ``@down`` sweep decorators, the
+  unified segment-based dispatch engine, and Newick read/write
+  (:func:`~hyperiax.from_newick` / :func:`~hyperiax.to_newick`).
+* **prebuilt**: BFFG for discrete Gaussian and continuous SDE transitions
+  (van der Meulen & Sommer 2025), plus weighted phylo-mean.
+
 Installation
 ------------
 
 .. code-block:: bash
 
-    # Install Hyperiax directly using pip
-    $ pip install hyperiax
+   pip install hyperiax                  # core, CPU JAX (jax + jaxlib + numpy)
+   pip install 'hyperiax[gpu]'           # + CUDA 12 JAX
+   pip install 'hyperiax[notebook]'      # tutorial notebooks
 
-    # Install Hyperiax from the repository, for the newest version
-    $ pip install git+https://github.com/ComputationalEvolutionaryMorphometry/hyperiax.git
-
-    # Install Hyperiax for development
-    $ git clone git@github.com:ComputationalEvolutionaryMorphometry/hyperiax.git
-    # or (if you haven't set up ssh)
-    $ git clone https://github.com/ComputationalEvolutionaryMorphometry/hyperiax.git
-    # and then install by
-    $ pip install -e hyperiax[dev]
-    # and optionally
-    $ pip install -e hyperiax[examples]
-    # to install the dependencies for all the example notebooks
-
-Check out the :doc:`Usage` section for further information
-
-.. note::
-
-   This project is under active development.
+Contents
+--------
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Tutorials
 
-   usage
-   hyperiax
+   notebooks/index
 
-Indices and tables
-==================
+.. toctree::
+   :maxdepth: 2
+   :caption: API reference
+
+   api/index
+
+
+Indices
+-------
 
 * :ref:`genindex`
 * :ref:`modindex`

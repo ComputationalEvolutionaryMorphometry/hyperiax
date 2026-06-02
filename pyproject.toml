@@ -1,54 +1,41 @@
 [project]
 name = "hyperiax"
 authors = [
-  { name="Stefan Sommer", email="sommer@di.ku.dk" },
-  { name="Marcus Holte Teller", email="marcus@di.ku.dk" },
-  { name="Gefan Yang", email="***@di.ku.dk" },
-  { name="Michael Baand Severinsen", email="***@di.ku.dk" },
-  { name="Morten Akhøj Pedersen", email="***@di.ku.dk" },
-  { name="Nicklas Boserup", email="***@di.ku.dk" }
+  { name = "Stefan Sommer", email = "sommer@di.ku.dk" },
+  { name = "Marcus Holte Teller", email = "marcus@di.ku.dk" },
+  { name = "Gefan Yang", email = "gy@di.ku.dk" },
+  { name = "Michael Baand Severinsen", email = "michael.baand@sund.ku.dk" },
+  { name = "Morten Akhøj Pedersen", email = "morten.akhoej@di.ku.dk" },
+  { name = "Nicklas Boserup", email = "nicklas.boserup@sund.ku.dk" },
 ]
 description = "Tree traversals using JAX"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "jax",
-    "jaxlib",
-    "tqdm",
+    "jax>=0.4.30",
+    "jaxlib>=0.4.30",
+    "numpy>=1.26",
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-examples = [
-    "jaxdifferentialgeometry",
-    "notebook",
-    "ipykernel",
-    "matplotlib",
-    "pandas",
-    "plotly",
-    "trimesh",
+gpu = [
+    "jax[cuda12]>=0.4.30",
 ]
-dev = [
-    "black",
-    "flake8",
-    "notebook",
-    "ipykernel",
-    "matplotlib",
-    "plotly",
-    "pytest",
+notebook = [
+    "matplotlib>=3.8",
+    "ipykernel>=6.29",
+    "numpyro>=0.15",
 ]
-doc = [
-    "hyperiax",
-    "sphinx-rtd-theme",
-    "sphinx-autodoc-annotation",
-    "nbsphinx",
-    "markupsafe==2.0.1",
-    "ipython",
+numpyro = [
+    "numpyro>=0.15",
 ]
 
 [project.urls]
@@ -57,10 +44,69 @@ Issues = "https://github.com/computationalevolutionarymorphometry/hyperiax/issue
 
 [build-system]
 requires = [
-    "setuptools>=60",
+    "setuptools>=68",
     "setuptools-scm>=8.0",
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["hyperiax*"]
+
 [tool.setuptools_scm]
 version_file = "hyperiax/_version.py"
+# Match v-prefixed tags (e.g. v3.0.0). Used by the PyPI publish workflow.
+tag_regex = "^v(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+(?:[a-z0-9.+-]*)?)$"
+# Reported when scm lookup fails entirely (tarball install w/o .git).
+fallback_version = "3.0.0"
+
+# ── uv-specific configuration ─────────────────────────────────────────────
+[dependency-groups]
+dev = [
+    # test + lint
+    "pytest>=8",
+    "pytest-xdist>=3",
+    "ruff>=0.6",
+    "pre-commit>=3.7",
+    # docs (sphinx)
+    "sphinx>=7.3",
+    "furo>=2024.5",
+    "myst-nb>=1.1",
+    "sphinx-autodoc-typehints>=2.1",
+    "sphinx-copybutton>=0.5",
+    # notebooks / examples
+    "ipykernel>=6.29",
+    "matplotlib>=3.8",
+]
+
+[tool.uv]
+required-version = ">=0.4"
+
+# ── pytest ────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]
+
+# ── ruff ──────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["hyperiax/_version.py", "docs/build", "docs/source/notebooks"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",  # line length — formatter handles wrapping; long math/string lines are fine
+    "E731",  # lambda assignment — common shorthand for state-dependent JAX functions
+    "B008",  # function call in default arg — common JAX idiom
+    "B905",  # zip without strict — keep as-is for now (jax pytree code passes equal-length iterables)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "E402"]  # tests use bugbear-flagged asserts and pytest.importorskip imports

@@ -1,44 +1,85 @@
-# Configuration file for the Sphinx documentation builder.
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../../hyperiax/'))
+"""Sphinx configuration for the hyperiax docs.
 
-# -- Project information
+Builds with ``make -C docs html`` (locally) or ``sphinx-build -W docs/source
+docs/build/html``. Notebook outputs are rendered as-saved — install the
+``[notebook]`` extra and re-run the .ipynb locally to refresh them.
+"""
 
-project = 'Hyperiax'
-copyright = '2024, CCEM, UCPH'
-author = 'CCEM'
+from __future__ import annotations
 
-release = '2.0'
-version = '2.0'
+import importlib.metadata as _md
 
-# -- General configuration
+# ── project info ────────────────────────────────────────────────────
+project = "hyperiax"
+author = "The hyperiax authors"
+copyright = "2026, hyperiax authors"
 
+try:
+    release = _md.version("hyperiax") or "0.0.0"
+except _md.PackageNotFoundError:
+    release = "0.0.0"
+version = ".".join(release.split(".")[:2])
+
+# ── extensions ──────────────────────────────────────────────────────
 extensions = [
-    'nbsphinx',
-    'sphinx.ext.duration',
-    'sphinx.ext.doctest',
-    'sphinx.ext.autodoc',
-    'sphinx_autodoc_annotation',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.intersphinx',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.napoleon",  # Google / NumPy docstring styles
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.viewcode",
+    "sphinx_autodoc_typehints",  # render type hints inline
+    "sphinx_copybutton",  # copy-to-clipboard on code blocks
+    "myst_nb",  # MyST markdown + notebook rendering
 ]
 
-intersphinx_mapping = {
-    'python': ('https://docs.python.org/3/', None),
-    'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
-    'jax': ('https://jax.readthedocs.io/en/latest/', None),
+autosummary_generate = True
+autodoc_typehints = "description"
+autodoc_member_order = "bysource"
+autodoc_default_options = {
+    "members": True,
+    "inherited-members": False,
+    "show-inheritance": True,
+    "undoc-members": False,
 }
-intersphinx_disabled_domains = ['std']
+napoleon_google_docstring = True
+napoleon_numpy_docstring = False
+napoleon_use_rtype = False
 
-templates_path = ['_templates']
+# ── myst-nb: render saved outputs, do not execute ──────────────────
+nb_execution_mode = "off"
+myst_enable_extensions = [
+    "amsmath",
+    "dollarmath",
+    "deflist",
+    "colon_fence",
+]
 
-# -- Options for HTML output
+# ── intersphinx ────────────────────────────────────────────────────
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "jax": ("https://jax.readthedocs.io/en/latest/", None),
+}
 
-html_theme = 'sphinx_rtd_theme'
+# ── theme ──────────────────────────────────────────────────────────
+html_theme = "furo"
+html_title = f"hyperiax {version}"
+html_static_path = ["_static"]
+html_theme_options = {
+    "source_repository": "https://github.com/computationalevolutionarymorphometry/hyperiax",
+    "source_branch": "v3",
+    "source_directory": "docs/source/",
+    "footer_icons": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/computationalevolutionarymorphometry/hyperiax",
+            "html": "",
+            "class": "fa-brands fa-github",
+        },
+    ],
+}
 
-# -- Options for EPUB output
-epub_show_urls = 'footnote'
-
-nbsphinx_allow_errors = True
-nbsphinx_execute = 'never'
+# ── misc ───────────────────────────────────────────────────────────
+exclude_patterns = ["_build", "**.ipynb_checkpoints"]
+templates_path = ["_templates"]
+suppress_warnings = ["mystnb.unknown_mime_type"]

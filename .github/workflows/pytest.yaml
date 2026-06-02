@@ -1,30 +1,27 @@
-name: Pytest on Pull Request
+name: Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main, v3]
   pull_request:
-    branches:
-      - main
+    branches: [main, v3]
 
 jobs:
   test:
-    name: Run Pytest
+    name: pytest (uv, Python 3.11)
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
-      
-    - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
       with:
-        python-version: 3.11
-        
-    - name: Install dependencies
-      run: |
-        pip install .[dev]
-        
-    - name: Run Pytest
-      run: make test
+        enable-cache: true
+
+    - name: Sync project (core runtime + dev group)
+      run: uv sync --group dev
+
+    - name: Run tests
+      run: uv run pytest

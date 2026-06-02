@@ -3,36 +3,33 @@ name: Publish Package
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-
 jobs:
   pypi-publish:
-    name: Upload release to PyPI
+    name: Build and publish to PyPI
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/hyperiax
     permissions:
-      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write  # required for PyPI trusted publishing
+      contents: read
+
     steps:
-    # retrieve your distributions here
-    - name: Setup python
-      uses: actions/setup-python@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
       with:
-        python-version: "3.11"
-    - name: Setup setuptools_scm
-      run: pip install setuptools_scm
-    - name: Checkout the repository
-      uses: actions/checkout@v2
-    - name: Build package
-      run: python setup.py sdist
-     # working-directory: ./app
+        fetch-depth: 0   # setuptools-scm needs the full history for the version tag
 
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
 
-    - name: Publish package distributions to PyPI
+    - name: Build sdist + wheel
+      run: uv build
+
+    - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.PYPI_API_TOKEN }}

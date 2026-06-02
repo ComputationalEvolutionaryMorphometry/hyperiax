@@ -1,20 +1,39 @@
-# Minimal makefile for Sphinx documentation
+# Minimal sphinx Makefile.
 #
+# Build with:   make html
+# Clean with:   make clean
+# Strict mode:  make html SPHINXOPTS=-W           (warnings as errors)
+# Open result:  make open                          (macOS)
 
-# You can set these variables from the command line, and also
-# from the environment for the first two.
 SPHINXOPTS    ?=
-SPHINXBUILD   ?= sphinx-build
+SPHINXBUILD   ?= uv run sphinx-build
 SOURCEDIR     = source
 BUILDDIR      = build
 
-# Put it first so that "make" without argument is like "make help".
+.PHONY: help html clean linkcheck open _unhide-pth
+
+# uv on macOS sets the UF_HIDDEN flag on `_`-prefixed files in site-packages
+# (including the editable install's `__editable__.<pkg>....pth`). CPython's
+# site.py silently skips hidden .pth files, so the editable finder never
+# registers and autosummary fails with `ModuleNotFoundError: No module named
+# 'hyperiax'`. Clear the flag before invoking sphinx.
+_unhide-pth:
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		SITE="$$(uv run python -c 'import site; print(site.getsitepackages()[0])' 2>/dev/null)"; \
+		[ -n "$$SITE" ] && chflags nohidden "$$SITE"/*.pth 2>/dev/null || true; \
+	fi
+
 help:
-	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS)
 
-.PHONY: help Makefile
+html: _unhide-pth
+	@$(SPHINXBUILD) -b html "$(SOURCEDIR)" "$(BUILDDIR)/html" $(SPHINXOPTS)
 
-# Catch-all target: route all unknown targets to Sphinx using the new
-# "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
-%: Makefile
-	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+clean:
+	rm -rf "$(BUILDDIR)" "$(SOURCEDIR)/api/generated"
+
+linkcheck: _unhide-pth
+	@$(SPHINXBUILD) -b linkcheck "$(SOURCEDIR)" "$(BUILDDIR)/linkcheck" $(SPHINXOPTS)
+
+open:
+	@open "$(BUILDDIR)/html/index.html"

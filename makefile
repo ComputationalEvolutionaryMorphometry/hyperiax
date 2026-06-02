@@ -1,9 +1,9 @@
-.PHONY: test local-notebook-test
+.PHONY: test sync
+
+# Install the core (CPU) runtime + dev group into the project venv (uv-managed).
+# For a CUDA venv instead:  uv sync --group dev --extra gpu
+sync:
+	uv sync --group dev
 
 test:
-	python -m pytest -s
-
-local-notebook-test:
-	@echo "Running all notebooks in examples directory..."
-	@find examples -name "*.ipynb" -type f -print -exec sh -c "echo 'Testing {}' && jupyter nbconvert --execute --inplace {} || echo 'Error in {}'" \;
-	@echo "Notebook testing complete."
+	uv run pytest
